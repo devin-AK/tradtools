@@ -213,9 +213,6 @@ process ALIGN {
           --readFilesCommand awk "'NR%4==1{print\\\$1\\\":\\\"substr(\\\$2,7)}NR%4!=1{print\\\$0}'" \
           --alignIntronMax 1 \
           --alignEndsType EndToEnd \
-          --outFilterScoreMinOverLread 0.3 \
-          --outFilterMatchNminOverLread 0.3 \
-          --outFilterMatchNmin 36 \
           --outSAMtype SAM \
           --outFileNamePrefix tmp_sam/${library_ID}_
     cp tmp_sam/*.out log/align
@@ -275,7 +272,7 @@ process SIGNAL_TRACK {
     output_bw = paste0('bw/',library_ID,'.bw'),
     export_stats = TRUE,
     ranges_operation = 'default',
-    mapQ = 10,
+    mapQ = 30,
     standard_chromosomes = FALSE,
     overwrite = TRUE,
     verbose = TRUE)
