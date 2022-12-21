@@ -1,0 +1,121 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+
+
+%post
+
+
+
+  ### ---------- SOFTWARE VERSIONS ---------- ###
+  R_VERSION=4.1.3
+  CUTADAPT_VERSION=4.2
+  SAMTOOLS_VERSION=1.16
+  STAR_VERSION=2.7.10b
+  MULTIQC_VERSION=1.13
+  ### --------------------------------------- ###
+
+
+
+  ### INSTALL LOCALES
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y \
+      locales
+  locale-gen en_US.UTF-8
+  update-locale LANG=en_US.UTF-8
+
+
+  ### INSTALL STAR
+  apt-get update
+  apt-get install -y \
+      g++ \
+      make \
+      wget \
+      libz-dev
+  wget https://github.com/alexdobin/STAR/archive/refs/tags/${STAR_VERSION}.tar.gz
+  tar -xzf ${STAR_VERSION}.tar.gz
+  cd STAR-${STAR_VERSION}/source
+  make STAR
+  cp STAR /usr/local/bin
+  cd ../../
+  rm -rf STAR-${STAR_VERSION}
+  rm ${STAR_VERSION}.tar.gz
+
+
+  ### INSTALL R (see https://docs.rstudio.com/resources/install-r/) 
+  apt-get update
+  apt-get install -y \
+      curl \
+      gdebi-core \
+      libcurl4-openssl-dev \
+      libxml2-dev
+  curl -O https://cdn.rstudio.com/r/ubuntu-2204/pkgs/r-${R_VERSION}_1_amd64.deb
+  gdebi --non-interactive r-${R_VERSION}_1_amd64.deb
+  ln -s /opt/R/${R_VERSION}/bin/R /usr/local/bin/R
+  ln -s /opt/R/${R_VERSION}/bin/Rscript /usr/local/bin/Rscript
+  rm r-${R_VERSION}_1_amd64.deb
+
+
+  ### INSTALL TRADTOOLS R PACKAGE
+  R --no-echo -e 'install.packages("remotes", repos="https://cloud.r-project.org/")'
+  R --no-echo -e 'remotes::install_github("devin-AK/tradtools/tradtoolsR",build_manual=TRUE)'
+
+
+  ### INSTALL CUTADAPT
+  apt-get update
+  apt-get install -y \
+      python3 \
+      pip
+  python3 -m pip install cutadapt==${CUTADAPT_VERSION}
+
+
+  ### INSTALL MULTIQC
+  pip install multiqc==${MULTIQC_VERSION}
+
+
+  ### INSTALL SAMTOOLS
+  apt-get update
+  apt-get install -y \
+      autoconf \
+      automake \
+      make \
+      gcc \
+      perl \
+      zlib1g-dev \
+      libbz2-dev \
+      liblzma-dev \
+      libcurl4-gnutls-dev \
+      libssl-dev \
+      libncurses5-dev
+  wget https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
+  tar -xf samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
+  cd samtools-${SAMTOOLS_VERSION} && \
+  make && make install && \
+  cd .. && \
+  rm samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
+  rm -rf samtools-${SAMTOOLS_VERSION}
+
+
+  ### CLEAN
+  apt-get clean
+
+
+
+%test
+  echo "|===== TRADTOOLS CONTAINER =====|"
+  echo "|                               |"
+  echo "|------ SOFTWARE VERSIONS ------|"
+  echo "  R version        : $(R --version | awk 'NR==1{print $3}')"
+  echo "  cutadapt version : $(cutadapt --version)"
+  echo "  samtools version : $(samtools --version | awk 'NR==1{print $2}')"
+  echo "  STAR version     : $(STAR --version)"
+  echo "  MultiQC version  : $(multiqc --version | awk '{print $3}')"
+  echo "|-------------------------------|"
+  echo "|                               |"
+  echo "|----- R PACKAGE VERSIONS ------|"
+  R --no-echo -e 'ip <- as.data.frame(installed.packages()[,c(1,3:4)]); rownames(ip) <- NULL; ip <- ip[is.na(ip$Priority),1:2,drop=FALSE]; print(ip, row.names=FALSE)'
+  echo "|===============================|"
+
+ 
+

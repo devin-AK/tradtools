@@ -1,0 +1,17 @@
+WORK_DIR=/work/data/trad/
+
+# Download reference genomes
+cd $WORK_DIR
+mkdir -p genome
+cd genome
+wget https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz
+wget https://github.com/devin-AK/tradtools/raw/main/example_data/lambda.fa.gz
+cd ..
+
+# Run the tradtools pipeline to process raw Fastq data
+./nextflow run devin-ak/tradtools --R1 raw_data/fastq/Undetermined_HT7VYDSXX_L2_1.fq.gz \
+                                  --R2 raw_data/fastq/Undetermined_HT7VYDSXX_L2_2.fq.gz \
+                                  --genome1 genome/hg19.fa.gz \
+                                  --genome2 genome/lambda.fa.gz \
+                                  --blacklist1 raw_data/other/hg19-blacklist.v2.bed.gz \
+                                  --adapters raw_data/other/adapters.fa
