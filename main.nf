@@ -199,11 +199,13 @@ process ALIGN {
   output:
     path "bam/initial/*_possort_markdup.bam", emit: bamFiles
     path "log/align/*"
+    path "log/duplicates/*"
 
   """
     mkdir -p tmp_sam
     mkdir -p bam/initial
     mkdir -p log/align
+    mkdir -p log/duplicates
 
     STAR --runThreadN ${task.cpus} \
           --genomeDir ${genome_DIR} \
@@ -219,7 +221,9 @@ process ALIGN {
     cp tmp_sam/*.out log/align
 
     samtools fixmate --threads ${task.cpus} -m -u tmp_sam/${library_ID}_Aligned.out.sam - | samtools sort --threads ${task.cpus} -u - | \
-    samtools markdup --threads ${task.cpus} -f log/align/${library_ID}_markdup_stats.txt -s -c -d 2500 --barcode-rgx \"^[a-zA-Z0-9]+:[0-9]+:[a-zA-Z0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+:([A|C|G|T|N]{6,8})\$\" - bam/initial/${library_ID}_possort_markdup.bam
+    samtools markdup --threads ${task.cpus} -f tmp_sam/${library_ID}_markdup_stats.txt -s -c -d 2500 --barcode-rgx \"^[a-zA-Z0-9]+:[0-9]+:[a-zA-Z0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+:([A|C|G|T|N]{6,8})\$\" - bam/initial/${library_ID}_possort_markdup.bam
+
+    Rscript -e "tradtoolsR::parse_samtools_markdup_stats(input_file='tmp_sam/${library_ID}_markdup_stats.txt',output_file='log/duplicates/${library_ID}_trad_markdups.csv')"
 
   """
 }
@@ -264,7 +268,7 @@ process SIGNAL_TRACK {
   input_bam <- '${input_bam}'
   input_blacklist <- '${input_blacklist}'
   reference_fasta <- '${reference_fasta}'
-  tradtoolsR::build_signal_track(input_bam = input_bam,
+  st <- tradtoolsR::build_signal_track(input_bam = input_bam,
     input_blacklist = input_blacklist,
     reference_fasta = reference_fasta,
     output_bed = paste0('bed/',library_ID,'.bed.gz'),
@@ -278,8 +282,8 @@ process SIGNAL_TRACK {
   ID <- tools:::file_path_sans_ext(basename(input_bam))
   dinuc_log <- paste0(ID,'_trad_dinucs.csv')
   count_log <- paste0(ID,'_trad_readcounts.csv')
-  file.copy(dinuc_log,'log/signal_track/')
-  file.copy(count_log,'log/signal_track/')
+  invisible(file.copy(dinuc_log,'log/signal_track/'))
+  invisible(file.copy(count_log,'log/signal_track/'))
   """
 }
 
