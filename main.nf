@@ -246,7 +246,6 @@ process SPLIT_BY_SPECIES {
 
 
 process SIGNAL_TRACK {
-  debug true
   publishDir "${params.results}", mode: "copy"
 
   input:
@@ -254,7 +253,8 @@ process SIGNAL_TRACK {
   output:
     path "bed/*.bed.gz", emit: bedFiles
     path "bw/*.bw", emit: bwFiles
-    path "log/signal_track/*"
+    path "log/signal_track/*_trad_dinucs.csv"
+    path "log/signal_track/*_trad_readcounts.csv"
   
   """
   #!/usr/bin/env Rscript
@@ -275,12 +275,12 @@ process SIGNAL_TRACK {
     mapQ = 30,
     standard_chromosomes = FALSE,
     overwrite = TRUE,
-    verbose = FALSE)
+    verbose = TRUE)
   ID <- tools:::file_path_sans_ext(basename(input_bam))
   dinuc_log <- paste0(ID,'_trad_dinucs.csv')
   count_log <- paste0(ID,'_trad_readcounts.csv')
-  invisible(file.copy(dinuc_log,'log/signal_track/'))
-  invisible(file.copy(count_log,'log/signal_track/'))
+  file.copy(dinuc_log,'log/signal_track/')
+  file.copy(count_log,'log/signal_track/')
   """
 }
 
