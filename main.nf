@@ -265,7 +265,7 @@ process SIGNAL_TRACK {
   input_bam <- '${input_bam}'
   input_blacklist <- '${input_blacklist}'
   reference_fasta <- '${reference_fasta}'
-  invisible(tradtoolsR::build_signal_track(input_bam = input_bam,
+  tradtoolsR::build_signal_track(input_bam = input_bam,
     input_blacklist = input_blacklist,
     reference_fasta = reference_fasta,
     output_bed = paste0('bed/',library_ID,'.bed.gz'),
@@ -275,7 +275,7 @@ process SIGNAL_TRACK {
     mapQ = 30,
     standard_chromosomes = FALSE,
     overwrite = TRUE,
-    verbose = TRUE))
+    verbose = FALSE)
   ID <- tools:::file_path_sans_ext(basename(input_bam))
   dinuc_log <- paste0(ID,'_trad_dinucs.csv')
   count_log <- paste0(ID,'_trad_readcounts.csv')
