@@ -218,9 +218,9 @@ process ALIGN {
     cp tmp_sam/*.out log/align
 
     samtools fixmate --threads ${task.cpus} -m -u tmp_sam/${library_ID}_Aligned.out.sam - | samtools sort --threads ${task.cpus} -u - | \
-    samtools markdup --threads ${task.cpus} -f tmp_sam/${library_ID}_markdup_stats.txt -s -c -d 2500 --barcode-rgx \"^[a-zA-Z0-9]+:[0-9]+:[a-zA-Z0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+:([A|C|G|T|N]{6,8})\$\" - bam/initial/${library_ID}_possort_markdup.bam
+    samtools markdup --threads ${task.cpus} -f log/duplicates/${library_ID}_markdup_stats.txt -s -c -d 2500 --barcode-rgx \"^[a-zA-Z0-9]+:[0-9]+:[a-zA-Z0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+:([A|C|G|T|N]{6,8})\$\" - bam/initial/${library_ID}_possort_markdup.bam
 
-    Rscript -e "tradtoolsR::parse_samtools_markdup_stats(input_file='tmp_sam/${library_ID}_markdup_stats.txt',output_file='log/duplicates/${library_ID}_trad_markdups.csv')"
+    Rscript -e "tradtoolsR::parse_samtools_markdup_stats(input_file='log/duplicates/${library_ID}_markdup_stats.txt',output_file='log/duplicates/${library_ID}_trad_markdups.csv')"
 
   """
 }
