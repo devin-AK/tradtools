@@ -150,7 +150,11 @@ process MULTIQC {
   cpus 1
   
   input:
-    tuple path(logDemux), path(logAlign), path(logDuplicates), path(logDinucs), path(logReadcounts)
+    path logDemux
+    path logAlign
+    path logDuplicates
+    path logDinucs
+    path logReadcounts
   output:
     path "reports/trad_multiqc_report.html"
 
