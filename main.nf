@@ -126,11 +126,40 @@ workflow {
 
   SIGNAL_TRACK(bamsfinal)
 
+  // Gather stats for MultiQC report
+  DEMULTIPLEX.out.logDemux
+    .set {logDemux}
+  ALIGN.out.logAlign
+    .set {logAlign}
+  ALIGN.out.logDuplicates
+    .set {logDuplicates}
+  SIGNAL_TRACK.out.logDinucs
+    .set {logDinucs}
+  SIGNAL_TRACK.out.logReadcounts
+    .set {logReadcounts}
+  MULTIQC(logDemux, logAlign, logDuplicates, logDinucs, logReadcounts)
+
 }
 
 
 
 // PROCESSES
+
+process MULTIQC {
+  publishDir "${params.results}", mode: "copy"
+  cpus 1
+  
+  input:
+    tuple path(logDemux), path(logAlign), path(logDuplicates), path(logDinucs), path(logReadcounts)
+  output:
+    path "reports/trad_multiqc_report.html"
+
+  """
+    mkdir -p reports
+    multiqc --config /usr/local/etc/multiqc_config.yaml ${params.results}/log/
+    mv multiqc_report.html reports/trad_multiqc_report.html
+  """
+}
 
 process PREPARE_GENOMES {
   publishDir "${params.results}", mode: "copy"
@@ -172,7 +201,7 @@ process DEMULTIPLEX {
   output:
     path "fastq/*R1.fastq", emit: fq1Files
     path "fastq/*R2.fastq", emit: fq2Files
-    path "log/demux/*"
+    path "log/demux/*", emit: logDemux
 
   """
     mkdir -p fastq
@@ -198,8 +227,8 @@ process ALIGN {
     tuple val(library_ID), path(demux_R1), path(demux_R2)
   output:
     path "bam/initial/*_possort_markdup.bam", emit: bamFiles
-    path "log/align/*"
-    path "log/duplicates/*"
+    path "log/align/*", emit: logAlign
+    path "log/duplicates/*", emit: logDuplicates
 
   """
     mkdir -p tmp_sam
@@ -253,8 +282,8 @@ process SIGNAL_TRACK {
   output:
     path "bed/*.bed.gz", emit: bedFiles
     path "bw/*.bw", emit: bwFiles
-    path "log/signal_track/*_trad_dinucs.csv"
-    path "log/signal_track/*_trad_readcounts.csv"
+    path "log/signal_track/*_trad_dinucs.csv", emit: logDinucs
+    path "log/signal_track/*_trad_readcounts.csv", emit: logReadcounts
   
   """
   #!/usr/bin/env Rscript
