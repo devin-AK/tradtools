@@ -251,6 +251,9 @@ process ALIGN {
           --readFilesCommand awk "'NR%4==1{print\\\$1\\\":\\\"substr(\\\$2,7)}NR%4!=1{print\\\$0}'" \
           --alignIntronMax 1 \
           --alignEndsType EndToEnd \
+          --outFilterScoreMinOverLread 0.5 \
+          --outFilterMatchNminOverLread 0.5 \
+          --outFilterMatchNmin 36 \
           --outSAMtype SAM \
           --outFileNamePrefix tmp_sam/${library_ID}_
     cp tmp_sam/*.out log/align
