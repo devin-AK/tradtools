@@ -159,7 +159,6 @@ process MULTIQC {
     path "reports/trad_multiqc_report.html"
 
   """
-    cp ${}
     mkdir -p reports
     multiqc --config /usr/local/etc/multiqc_config.yaml .
     mv multiqc_report.html reports/trad_multiqc_report.html
