@@ -72,6 +72,8 @@ From: ubuntu:22.04
 
   ### INSTALL MULTIQC
   pip install multiqc==${MULTIQC_VERSION}
+  wget https://github.com/devin-AK/tradtools/raw/main/assets/multiqc_config.yaml
+  mv multiqc_config.yaml /usr/local/etc
 
 
   ### INSTALL SAMTOOLS
