@@ -129,23 +129,18 @@ workflow {
   // Gather stats for MultiQC report
   DEMULTIPLEX.out.logDemux
     .collect()
-    .view()
     .set {logDemux}
   ALIGN.out.logAlign
     .collect()
-    .view()
     .set {logAlign}
   ALIGN.out.logDuplicates
     .collect()
-    .view()
     .set {logDuplicates}
   SIGNAL_TRACK.out.logDinucs
     .collect()
-    .view()
     .set {logDinucs}
   SIGNAL_TRACK.out.logReadcounts
     .collect()
-    .view()
     .set {logReadcounts}
   MULTIQC(logDemux, logAlign, logDuplicates, logDinucs, logReadcounts)
 
