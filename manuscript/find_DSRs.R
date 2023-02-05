@@ -1,4 +1,4 @@
-
+  
   # Load packages
   library(openxlsx)
   library(DESeq2)
@@ -7,16 +7,23 @@
   library(BSgenome.Hsapiens.UCSC.hg19)
   library(BiocParallel)
   library(limma)
-
+  library(apeglm)
+  library(ashr)
+  library(ggplot2)
+  library(ggpubr)
+  
   
   # System specific parameters
-  setwd('/work/data/trad/')
-  register(MulticoreParam(12))
+  #setwd('/work/data/trad/')
+  #register(MulticoreParam(12))
+  setwd('~/Desktop/trad/')
+  register(MulticoreParam(6))
   
   
   # Import metadata
-  metadata <- read.xlsx('bigwig_summary.xlsx')
-  
+  coldata <- read.xlsx('bigwig_summary.xlsx')
+  coldata[] <- lapply(coldata,factor)
+
   
   # Define genome bins
   human_chroms <- as(seqinfo(Hsapiens),'GRanges')[1:23]
@@ -24,7 +31,7 @@
   human_bins <- unlist(slidingWindows(human_chroms,width=100e3,step=50e3),use.names=F)
   names(human_bins) <- as.character(human_bins)
   lambda_chroms <- GRanges(seqnames='chrL',ranges=IRanges(start=1,end=48502))
-  lambda_bins <- unlist(slidingWindows(lambda_chroms,width=1000,step=500))
+  lambda_bins <- unlist(slidingWindows(lambda_chroms,width=20,step=10))
   names(lambda_bins) <- as.character(lambda_bins)
   
   
@@ -35,6 +42,11 @@
   lambda_bw_files <- BigWigFileList(dir('results/bw',full.names=T,pattern='_spec2.bw$'))
   lambda_bw <- bplapply(lambda_bw_files,import,as='RleList')
   lambda_bw <- lapply(lambda_bw,'[',seqlevels(lambda_bins))
+  # STOPPING POINT
+  # saveRDS(human_bw,'human_bw.RDS')
+  # saveRDS(lambda_bw,'lambda_bw.RDS')
+  # human_bw <- readRDS('human_bw.RDS')
+  # lambda_bw <- readRDS('lambda_bw.RDS')
   
   
   # Compute counts
@@ -52,39 +64,105 @@
   row.names(human_counts) <- names(human_bins)
   
   
-  # Construct SummarizedExperiment and DESeqDataSet objects
+  # Construct SummarizedExperiment object
   # sanity check
-  identical(colnames(human_counts),metadata$library_ID)
-  identical(colnames(lambda_counts),metadata$library_ID)
+  stopifnot(colnames(human_counts) == coldata$library_ID)
+  stopifnot(colnames(lambda_counts) == coldata$library_ID)
   counts <- rbind(human_counts,lambda_counts)
-  bins <- c(human_bins,lambda_bins)
+  bins <- suppressWarnings(c(human_bins,lambda_bins))
   se <- SummarizedExperiment(assays=list(counts=counts),
                              rowRanges=bins,
-                             colData=metadata)
-  
-  # 
-  # hc <- SummarizedExperiment(assays=list(counts=human_counts),
-  #                            rowRanges=human_bins,
-  #                            colData=metadata)
-  # lc <- SummarizedExperiment(assays=list(counts=lambda_counts),
-  #                            rowRanges=lambda_bins,
-  #                            colData=metadata)
-  # hdds <- DESeqDataSet(hc,design=~batch+sample)
-  # ldds <- DESeqDataSet(lc,design=~batch+sample)
+                             colData=coldata)
+  # STOPPING POINT
+  # # saveRDS(se,'se_020423.RDS')
+  # # se <- readRDS('se_020423.RDS')
   
   
-  # Estimate size factors from spike in
-  controlGenes <- grep('^chrL:',row.names(counts),value=T)
+  # Estimate Size Factors (to account for differences in sequencing depth)
   dds <- DESeqDataSet(se,design=~batch+condition)
-  dds$condition <- relevel(dds$condition,ref='IMR_200J_UVB')
-  dds <- estimateSizeFactors(dds,type='iterate',controlGenes=controlGenes)
-  # dds <- readRDS('dds_020323.RDS')
+  dds$condition <- relevel(dds$condition,ref='IMR_200J_UVB') # set reference level
+  controls <- grepl('^chrL:',row.names(se))
+  dds <- estimateSizeFactors(dds,type='ratio',locfunc=median,controlGenes=controls) # can be ratio, poscounts, or iterate
   
   
-  # subset (optional)
-  samples_to_keep <- c('IMR_100J_UVC','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','WI38_200J_UVB','TP53_200J_UVB')
-  dds <- dds[,dds$condition %in% samples_to_keep]
-  dds <- estimateSizeFactors(dds,type='iterate',controlGenes=controlGenes)
+  # Differential susceptibility analysis
+  dds <- DESeq(dds,parallel=TRUE)
+  
+  
+  # Results
+  Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
+  res <- results(dds,contrast=Contrast)
+  resASH <- lfcShrink(dds, contrast=Contrast, type='ashr') # log fold-change shrinkage for visualizations
+  resASH$lambda_control <- controls
+  #resASH <- resASH[complete.cases(resASH),] # filtering
+  DSR_thresh <- c(0.00001,1)
+  resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
+  resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
+  
+  
+  # Diagnostic Plots
+  DESeq2::plotDispEsts(dds)
+  DESeq2::plotSparsity(dds)
+  DESeq2::plotMA(res,ylim=c(-4,4))
+  DESeq2::plotMA(resASH,ylim=c(-4,4))
+  
+  
+  # Spike in plots
+  ps1 <- ggplot(as.data.frame(resASH),aes(x=baseMean,y=log2FoldChange)) +
+    geom_point(aes(color=lambda_control)) +
+    geom_hline(yintercept=c(-1,1),linetype='dashed') +
+    scale_color_manual(values=c('gray','#9ECAE1')) +
+    scale_x_continuous(trans='log10',limits=c(0.01,15000)) +
+    ylim(c(-4,4)) +
+    labs(color='lambda control') +
+    xlab('mean susceptibility') +
+    ylab('log fold-change') +
+    guides(color='none') +
+    theme_bw()
+  ps2 <- ggplot(as.data.frame(resASH),aes(x=log2FoldChange,y=minus_log10_pval)) +
+    geom_point(aes(color=lambda_control)) +
+    scale_color_manual(values=c('gray','#9ECAE1')) +
+    xlim(c(-4,4)) +
+    ylim(c(0,20)) +
+    ylab('-log10(pvalue)') +
+    geom_hline(yintercept = -log10(DSR_thresh[1]), linetype='dashed') +
+    geom_vline(xintercept = c(-1*DSR_thresh[2],DSR_thresh[2]), linetype='dashed') + 
+    theme_bw()
+  spike_plots <- ggarrange(ps1,ps2,ncol=2,widths=c(1,1.5))
+  annotate_figure(spike_plots,top=paste(Contrast[2],'vs',Contrast[3]))
+  
+  
+  # MA and Volcano plots
+  pm1 <- ggplot(as.data.frame(resASH),aes(x=baseMean,y=log2FoldChange)) +
+    geom_point(aes(color=DSR)) +
+    geom_hline(yintercept=c(-1,1),linetype='dashed') +
+    scale_color_manual(values=c('gray','#FC9272')) +
+    scale_x_continuous(trans='log10',limits=c(0.01,15000)) +
+    ylim(c(-4,4)) +
+    labs(color='lambda control') +
+    xlab('mean susceptibility') +
+    ylab('log fold-change') +
+    guides(color='none') +
+    theme_bw()
+  pv2 <- ggplot(as.data.frame(resASH),aes(x=log2FoldChange,y=minus_log10_pval)) +
+    geom_point(aes(color=DSR)) +
+    scale_color_manual(values=c('gray','#FC9272')) +
+    xlim(c(-4,4)) +
+    ylim(c(0,20)) +
+    ylab('-log10(pvalue)') +
+    geom_hline(yintercept = -log10(DSR_thresh[1]), linetype='dashed') +
+    geom_vline(xintercept = c(-1*DSR_thresh[2],DSR_thresh[2]), linetype='dashed') + 
+    theme_bw()
+  DSR_plots <- ggarrange(pm1,pv2,ncol=2,widths=c(1,1.5))
+  annotate_figure(DSR_plots,top=paste(Contrast[2],'vs',Contrast[3]))
+  
+  
+  
+  
+  
+  
+  
+  
   
   
   # PCA plots
@@ -107,33 +185,7 @@
   EnhancedVolcano(res,lab=rownames(res),x='log2FoldChange',y='pvalue')
   
   
-  
-  tmp <- res[!grepl('^chrL:',row.names(res)),]
-  
-  EnhancedVolcano(tmp,lab=rownames(tmp),x='log2FoldChange',y='pvalue')
-  
-  
-  
-  dds <- readRDS('dds_020323.RDS')
-  samples_to_keep <- c('IMR_100J_UVC','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','WI38_200J_UVB','TP53_200J_UVB')
-  samples_to_keep <- c(samples_to_keep,'WI38RAF_200J_UVB')
-  dds <- dds[,dds$condition %in% samples_to_keep]
-  design(dds) <- formula(~batch + condition)
-  dds$condition <- droplevels(dds$condition)
-  lc <- dds[grepl('^chrL:',row.names(dds)),]
-  lc <- estimateSizeFactors(lc)
-  sizeFactors(dds) <- sizeFactors(lc)
-  dds <- DESeq(dds)
-  res <- results(dds,contrast=c('condition','TP53_200J_UVB','IMR_200J_UVB'))
-  EnhancedVolcano(res[!grepl('^chrL:',row.names(res)),],title='TP53',lab=NA,x='log2FoldChange',y='pvalue')
-  EnhancedVolcano(res[grepl('^chrL:',row.names(res)),],title='lambda',lab=NA,x='log2FoldChange',y='pvalue')
-  
-  
-  EnhancedVolcano(res[!grepl('^chrL:',row.names(res)),],x='log2FoldChange',y='pvalue',lab=NA)
-  
-  spike <- grep('^chrL:',row.names(res),value=T)
-  EnhancedVolcano(res,lab=row.names(res),x='log2FoldChange',y='padj')
-  
-  EnhancedVolcano(res,lab=rownames(res),x='log2FoldChange',y='pvalue',colCustom=spike)
-  
-  
+  # subset (optional)
+  # samples_to_keep <- c('IMR_100J_UVC','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','WI38_200J_UVB','TP53_200J_UVB')
+  # dds <- dds[,dds$condition %in% samples_to_keep]
+  # dds <- estimateSizeFactors(dds,type='iterate',controlGenes=controlGenes)
