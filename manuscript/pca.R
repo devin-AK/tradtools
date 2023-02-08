@@ -30,7 +30,7 @@
   # Define parameters
   binSize <- 50e3 # sliding window width (in bp)
   binStep <- 50e3 # sliding window step (in bp)
-  samples_to_plot <- c('IMR_100J_UVC','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','WI38_200J_UVB','TP53_200J_UVB')
+  samples_to_plot <- c('IMR_100J_UVC','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','WI38_200J_UVB','TP53_200J_UVB','WI38RAF_200J_UVB')
   
   
   # Define genome bins

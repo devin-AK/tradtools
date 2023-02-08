@@ -28,7 +28,7 @@
   # Define genome bins
   human_chroms <- as(seqinfo(Hsapiens),'GRanges')[1:23]
   seqlevels(human_chroms) <- seqlevelsInUse(human_chroms)
-  human_bins <- unlist(slidingWindows(human_chroms,width=50e3,step=50e3),use.names=F)
+  human_bins <- unlist(slidingWindows(human_chroms,width=1e6,step=1e6),use.names=F)
   names(human_bins) <- as.character(human_bins)
   lambda_chroms <- GRanges(seqnames='chrL',ranges=IRanges(start=1,end=48502))
   lambda_bins <- unlist(slidingWindows(lambda_chroms,width=20,step=10))
@@ -101,6 +101,7 @@
   #Contrast <- c('condition','Melanocytes_200J_UVB','IMR_200J_UVB')
   #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
   Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
+  #Contrast <- c('condition','WI38RAF_200J_UVB','WI38_200J_UVB')
   res <- results(dds,contrast=Contrast)
   resASH <- lfcShrink(dds, contrast=Contrast, type='ashr') # log fold-change shrinkage for visualizations
   resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
