@@ -1,3 +1,41 @@
+
+  library(rtracklayer)
+  
+  
+  cs <- import.bed('~/Desktop/tp53/E017_15_coreMarks_mnemonics.bed.gz')
+  
+  
+  dsr <- resASH[complete.cases(resASH),]
+  
+  top <- dsr[dsr$padj < 0.0001,]
+  
+  gr <- as(row.names(top),'GRanges')
+  
+  GenomicRanges::findOverlaps(gr,cs[cs$name=='9_Het',])
+  
+  dat <- lapply(unique(cs$name),function(i){
+    csi <- cs[cs$name==i,]
+    csi.num <- length(csi)
+    csi.sum <- sum(width(csi))
+    hits <- GenomicRanges::findOverlaps(gr,csi)
+    hit.num <- length(unique(subjectHits(hits)))
+    c(hit.num,csi.num)
+  })
+  names(dat) <- unique(cs$name)
+  
+  dat2 <- do.call(rbind,dat)
+  colnames(dat2) <- c('hits','total_cs')
+  
+  dat3 <- dat2[,1]/dat2[,2]
+  barplot(dat3[order(dat3,decreasing=T)],las=2,ylab='Fraction chromatin state overlapping top DSR')
+  
+  
+  
+  
+  
+  
+  
+  
   
   # Load packages
   library(openxlsx)
@@ -23,13 +61,14 @@
   # Import metadata
   coldata <- read.xlsx('bigwig_summary.xlsx')
   coldata[] <- lapply(coldata,factor)
-
+  
   
   # Define genome bins
   human_chroms <- as(seqinfo(Hsapiens),'GRanges')[1:23]
   seqlevels(human_chroms) <- seqlevelsInUse(human_chroms)
-  human_bins <- unlist(slidingWindows(human_chroms,width=50e3,step=50e3),use.names=F)
-  names(human_bins) <- as.character(human_bins)
+  human_bins <- cs
+  human_bins <- keepSeqlevels(human_bins,seqlevels(human_chroms),pruning.mode='coarse')
+  names(human_bins) <- paste(as.character(human_bins),human_bins$name,sep='_')
   lambda_chroms <- GRanges(seqnames='chrL',ranges=IRanges(start=1,end=48502))
   lambda_bins <- unlist(slidingWindows(lambda_chroms,width=20,step=10))
   names(lambda_bins) <- as.character(lambda_bins)
@@ -86,13 +125,32 @@
   
   
   # Differential susceptibility analysis
-  # dds <- dds[!grepl('^chrL:',row.names(se))]
+  dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
   dds <- DESeq(dds,parallel=TRUE)
   
+  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
+  res <- results(dds,contrast=Contrast)
+  res$chromatin_state <- as.factor(sapply(strsplit(row.names(res),'_'),'[',3))
+  res$effect <- -1*log10(res$padj)*sign(res$log2FoldChange)
   
-  # Diagnostic Plots
-  DESeq2::plotDispEsts(dds)
-  DESeq2::plotSparsity(dds)
+  ggplot(as.data.frame(res),aes(x=chromatin_state,y=effect)) +
+    geom_violin()
+  
+  ggplot(as.data.frame(res),aes(x=chromatin_state,y=log2FoldChange)) +
+    geom_violin()
+  
+  
+  
+  # PCA
+  dds <- dds[,dds$condition %in% samples_to_plot]
+  dds$condition <- droplevels(dds$condition)
+  rld <- rlog(dds, blind=TRUE)
+  mat <- assay(rld)
+  mm <- model.matrix(~condition,colData(rld))
+  mat <- limma::removeBatchEffect(mat,batch=rld$batch,design=mm)
+  assay(rld) <- mat
+  ntop <- round(0.1*nrow(dds)) # top 10%
+  plotPCA(rld,ntop=ntop)
   
   
   # Results
@@ -109,7 +167,7 @@
   resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
   resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
   
-
+  
   # MA and Volcano plots (with spike-ins)
   pm1 <- ggplot(as.data.frame(resASH),aes(x=baseMean,y=log2FoldChange)) +
     geom_point(aes(fill=lambda_control,color=DSR),pch=21) +
@@ -138,7 +196,7 @@
   annotate_figure(DSR_plots,top=paste(Contrast[2],'vs',Contrast[3]))
   
   
-
+  
   
   
   
