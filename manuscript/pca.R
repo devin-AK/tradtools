@@ -96,6 +96,22 @@
   # Differential susceptibility analysis
   dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
   dds <- DESeq(dds,parallel=TRUE)
+  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
+  res <- results(dds,contrast=Contrast)
+  sum(res$padj < 0.05,na.rm=TRUE)
+  sum(res$padj < 0.05,na.rm=TRUE) / nrow(res)
+  sum(res$padj < 0.05 & res$log2FoldChange>1,na.rm=T)
+  sum(res$padj < 0.05 & res$log2FoldChange<0,na.rm=T)
+  sum(res$padj < 0.00001,na.rm=TRUE)
+  
+  resASH <- lfcShrink(dds, contrast=Contrast, type='ashr') # log fold-change shrinkage for visualizations
+  #resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
+  #resASH <- resASH[complete.cases(resASH),] # filtering
+  DSR_thresh <- c(0.05,1)
+  resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
+  resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
+  
+  saveRDS(resASH,file='TP53_resASH.RDS')
   
   
   # PCA
