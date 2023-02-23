@@ -35,13 +35,6 @@
   
   
   
-  #  Count DSRs in genome tiles
-  bed <- count_DSRs_in_tiles(dsr=dsr,tiles=tg,padj_thresh=0.05,log2fc_thresh=1)
-  
-  
-  DSR_plot3(bed=bed,col_range=c(0,30),ylim=c(0,50),outline_points=F,hline_interval=5,cex_modifier=0.8,bg.border=NA)
-  
-
   DSR_plot3 <- function(bed, col_range=c(0,30), ylim=col_range, outline_points=F, hline_interval=5, cex_modifier=1, bg.border=NA) {
     require(circlize)
     require(RColorBrewer)
@@ -99,30 +92,16 @@
   }
   
   
-  DSRup <- lapply(L,.count_sig_DSRs_in_tiles,tilewidth=1e6,type='up')
-  DSRdn <- lapply(L,.count_sig_DSRs_in_tiles,tilewidth=1e6,type='down')
-  matup <- do.call(cbind,lapply(DSRup,'[[',2))
-  matdn <- do.call(cbind,lapply(DSRdn,'[[',2))
-  rng <- as.data.frame(GRanges(as.data.frame(DSRup[[1]][,1])[,1]))[,1:3]
-  colnames(rng) <- c('chr','start','end')
-  ## Do the plotting
+  
+  #  Count DSRs in genome tiles
+  bed <- count_DSRs_in_tiles(dsr=dsr,tiles=tg,padj_thresh=0.05,log2fc_thresh=1)
   
   
-  bed1 <- cbind(rng,matup[,1],matdn[,1])
-  bed2 <- cbind(rng,matup[,2],matdn[,2])
-  bed3 <- cbind(rng,matup[,3],matdn[,3])
-  bed4 <- cbind(rng,matup[,4],matdn[,4])
-  bed5 <- cbind(rng,matup[,5],matdn[,5])
-  bed6 <- cbind(rng,matup[,6],matdn[,6])
-  bed7 <- cbind(rng,matup[,7],matdn[,7])
-  bed8 <- cbind(rng,matup[,8],matdn[,8])
+  # TP53 col_range=c(0,30); ylim=c(0,50)
+  DSR_plot3(bed=bed,col_range=c(0,30),ylim=c(0,50),outline_points=F,hline_interval=5,cex_modifier=0.8,bg.border=NA)
   
-  layout(matrix(1:8,2,4))
-  DSR_plot3(bed1, col_range=c(0,50), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
-  DSR_plot3(bed2, col_range=c(0,50), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
-  DSR_plot3(bed3, col_range=c(0,50), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
-  DSR_plot3(bed4, col_range=c(0,50), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
-  DSR_plot3(bed5, col_range=c(0,50), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
-  DSR_plot3(bed6, col_range=c(0,50), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
-  DSR_plot3(bed7, col_range=c(0,50), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
-  DSR_plot3(bed8, col_range=c(0,100), ylim=c(0,100), outline_points=F, hline_interval=25, cex_modifier = 0.5, bg.border=NA)
+
+  
+  
+  
+  
