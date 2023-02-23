@@ -96,9 +96,9 @@
   # Differential susceptibility analysis
   dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
   dds <- DESeq(dds,parallel=TRUE)
-  #Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
+  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
   #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
-  Contrast <- c('condition','WI38_200J_UVB','IMR_200J_UVB')
+  #Contrast <- c('condition','WI38_200J_UVB','IMR_200J_UVB')
   res <- results(dds,contrast=Contrast)
   sum(res$padj < 0.05,na.rm=TRUE)
   sum(res$padj < 0.05,na.rm=TRUE) / nrow(res)
