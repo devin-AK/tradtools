@@ -5,9 +5,9 @@
   library(BSgenome.Hsapiens.UCSC.hg19)
   
   # Import results from DSR identification
-  res <- readRDS('~/Desktop/trad/TP53_resASH.RDS') # see pca.R for details
-  dsr <- GRanges(row.names(res))
-  mcols(dsr) <- DataFrame(res)
+  resASH <- readRDS('~/Desktop/trad/TP53_resASH.RDS') # see pca.R for details
+  dsr <- GRanges(row.names(resASH))
+  mcols(dsr) <- DataFrame(resASH)
   
 
   
@@ -94,7 +94,7 @@
   
   
   #  Count DSRs in genome tiles
-  bed <- count_DSRs_in_tiles(dsr=dsr,tiles=tg,padj_thresh=0.05,log2fc_thresh=1)
+  bed <- count_DSRs_in_tiles(dsr=dsr,tiles=tg,padj_thresh=0.0001,log2fc_thresh=0)
   
   
   # TP53 col_range=c(0,30); ylim=c(0,50)
