@@ -96,7 +96,8 @@
   # Differential susceptibility analysis
   dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
   dds <- DESeq(dds,parallel=TRUE)
-  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
+  #Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
+  Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
   res <- results(dds,contrast=Contrast)
   sum(res$padj < 0.05,na.rm=TRUE)
   sum(res$padj < 0.05,na.rm=TRUE) / nrow(res)
@@ -111,7 +112,7 @@
   resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
   resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
   
-  saveRDS(resASH,file='TP53_resASH.RDS')
+  #saveRDS(resASH,file='TP53_resASH.RDS')
   
   
   # PCA
