@@ -46,15 +46,15 @@
   # # Import bw files
   human_bw_files  <- BigWigFileList(dir('results/bw',full.names=T,pattern='_spec1.bw$'))
   lambda_bw_files <- BigWigFileList(dir('results/bw',full.names=T,pattern='_spec2.bw$'))
-  # human_bw <- bplapply(human_bw_files,import,as='RleList')
-  # human_bw <- lapply(human_bw,'[',seqlevels(human_bins))
-  # lambda_bw <- bplapply(lambda_bw_files,import,as='RleList')
-  # lambda_bw <- lapply(lambda_bw,'[',seqlevels(lambda_bins))
-  # STOPPING POINT
-  # saveRDS(human_bw,'human_bw.RDS')
-  # saveRDS(lambda_bw,'lambda_bw.RDS')
-  human_bw <- readRDS('human_bw.RDS')
-  lambda_bw <- readRDS('lambda_bw.RDS')
+  human_bw <- bplapply(human_bw_files,import,as='RleList')
+  human_bw <- lapply(human_bw,'[',seqlevels(human_bins))
+  lambda_bw <- bplapply(lambda_bw_files,import,as='RleList')
+  lambda_bw <- lapply(lambda_bw,'[',seqlevels(lambda_bins))
+  #STOPPING POINT
+  #saveRDS(human_bw,'human_bw.RDS')
+  #saveRDS(lambda_bw,'lambda_bw.RDS')
+  #human_bw <- readRDS('human_bw.RDS')
+  #lambda_bw <- readRDS('lambda_bw.RDS')
   
   
   # Compute counts
@@ -97,7 +97,8 @@
   dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
   dds <- DESeq(dds,parallel=TRUE)
   #Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
-  Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
+  #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
+  Contrast <- c('condition','WI38_200J_UVB','IMR_200J_UVB')
   res <- results(dds,contrast=Contrast)
   sum(res$padj < 0.05,na.rm=TRUE)
   sum(res$padj < 0.05,na.rm=TRUE) / nrow(res)
@@ -108,9 +109,9 @@
   resASH <- lfcShrink(dds, contrast=Contrast, type='ashr') # log fold-change shrinkage for visualizations
   #resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
   #resASH <- resASH[complete.cases(resASH),] # filtering
-  DSR_thresh <- c(0.05,1)
-  resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
-  resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
+  #DSR_thresh <- c(0.05,1)
+  #resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
+  #resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
   
   #saveRDS(resASH,file='TP53_resASH.RDS')
   
