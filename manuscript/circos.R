@@ -18,7 +18,7 @@
 
   
   
-  # Count DSRs in genome tiles
+  # Define functions
   count_DSRs_in_tiles <- function(dsr, tiles, padj_thresh=0.05, log2fc_thresh=1) {
     stopifnot(is(dsr,'GRanges'))
     stopifnot(is(tiles,'GRanges'))
@@ -33,38 +33,15 @@
     return(bed)
   }
   
-  .count_DSRs_in_tiles(DSR_up,tg)
+  
+  
+  #  Count DSRs in genome tiles
+  bed <- count_DSRs_in_tiles(dsr=dsr,tiles=tg,padj_thresh=0.05,log2fc_thresh=1)
+  
+  
+  DSR_plot3(bed=bed,col_range=c(0,30),ylim=c(0,50),outline_points=F,hline_interval=5,cex_modifier=0.8,bg.border=NA)
   
 
-  
-
-  
-  count_DSRs_in_tiles <- function(dsr, tiles) {
-    require(data.table)
-    require(GenomicRanges)
-    o <- findOverlaps(dsr,)
-  }
-  
-  # Define functions
-  .count_sig_DSRs_in_tiles <- function(dsr, tilewidth=10e6, type='up') {
-    require(data.table)
-    tg <- tileGenome(seqlengths(dsr),tilewidth=tilewidth,cut.last.tile.in.chrom=T)
-    cn <- 'padj'
-    o <- findOverlaps(dsr,tg,type='within',select='all',maxgap=-1L,minoverlap=0L,ignore.strand=T)
-    dsr <- dsr[queryHits(o)]
-    id <- as.character(tg)[subjectHits(o)]
-    dat <- as.data.table(mcols(dsr))
-    dat <- cbind(dat,id=id)
-    if(type=='up') {
-      res <- dat[,sum(padj<0.001 & log2FoldChange>0),by=id]
-    } else if(type=='down') {
-      res <- dat[,sum(padj<0.001 & log2FoldChange<0),by=id]
-    } else if(type=='both') {
-      res <- dat[,sum(padj<0.001),by=id]
-    } else stop('"type" must be one of "up" or "down"')
-    return(res)
-  }
-  
   DSR_plot3 <- function(bed, col_range=c(0,30), ylim=col_range, outline_points=F, hline_interval=5, cex_modifier=1, bg.border=NA) {
     require(circlize)
     require(RColorBrewer)
