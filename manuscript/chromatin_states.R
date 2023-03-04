@@ -1,199 +1,87 @@
 
   library(rtracklayer)
-  
-  
-  cs <- import.bed('~/Desktop/tp53/E017_15_coreMarks_mnemonics.bed.gz')
-  
-  
-  dsr <- resASH[complete.cases(resASH),]
-  
-  top <- dsr[dsr$padj < 0.0001,]
-  
-  gr <- as(row.names(top),'GRanges')
-  
-  GenomicRanges::findOverlaps(gr,cs[cs$name=='9_Het',])
-  
-  dat <- lapply(unique(cs$name),function(i){
-    csi <- cs[cs$name==i,]
-    csi.num <- length(csi)
-    csi.sum <- sum(width(csi))
-    hits <- GenomicRanges::findOverlaps(gr,csi)
-    hit.num <- length(unique(subjectHits(hits)))
-    c(hit.num,csi.num)
-  })
-  names(dat) <- unique(cs$name)
-  
-  dat2 <- do.call(rbind,dat)
-  colnames(dat2) <- c('hits','total_cs')
-  
-  dat3 <- dat2[,1]/dat2[,2]
-  barplot(dat3[order(dat3,decreasing=T)],las=2,ylab='Fraction chromatin state overlapping top DSR')
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  # Load packages
-  library(openxlsx)
-  library(DESeq2)
-  library(rtracklayer)
   library(GenomicRanges)
+  library(data.table)
+  library(pheatmap)
   library(BSgenome.Hsapiens.UCSC.hg19)
-  library(BiocParallel)
-  library(limma)
-  library(apeglm)
-  library(ashr)
   library(ggplot2)
-  library(ggpubr)
   
   
-  # System specific parameters
-  #setwd('/work/data/trad/')
-  #register(MulticoreParam(12))
-  setwd('~/Desktop/trad/')
-  register(MulticoreParam(6))
+  # Import data
+  # chromatin states
+  si <- seqinfo(Hsapiens)
+  si <- si[seqnames(si)[1:23]]
+  cs <- import.bed('~/Desktop/tp53/E017_15_coreMarks_mnemonics.bed.gz')
+  cs <- keepSeqlevels(cs,value=seqlevels(si),pruning.mode='coarse')
+  seqinfo(cs) <- si
+  cs.names <- unique(cs$name)
+  #resASH <- read.csv('~/Desktop/trad/DSR_TP53_50kb_resASH.csv')
+  resASH <- read.csv('~/Desktop/trad/DSR_100UVC_50kb_resASH.csv')
+  resASH <- GRanges(resASH$X,mcols=resASH[,-1])
+  resASH <- keepSeqlevels(resASH,value=seqlevels(si),pruning.mode='coarse')
+  seqinfo(resASH) <- si
   
   
-  # Import metadata
-  coldata <- read.xlsx('bigwig_summary.xlsx')
-  coldata[] <- lapply(coldata,factor)
+  # Define top DSRs
+  dsr <- resASH[complete.cases(mcols(resASH)),]
+  dsr <- dsr[order(dsr$mcols.padj),]
+  #top_dsr <- dsr[dsr$padj < 0.0001,]
+  dsr.up <- dsr[dsr$mcols.log2FoldChange>0,]
+  top_dsr <- dsr[1:10000]
+  sl <- seqlevels(si)
   
   
-  # Define genome bins
-  human_chroms <- as(seqinfo(Hsapiens),'GRanges')[1:23]
-  seqlevels(human_chroms) <- seqlevelsInUse(human_chroms)
-  human_bins <- cs
-  human_bins <- keepSeqlevels(human_bins,seqlevels(human_chroms),pruning.mode='coarse')
-  names(human_bins) <- paste(as.character(human_bins),human_bins$name,sep='_')
-  lambda_chroms <- GRanges(seqnames='chrL',ranges=IRanges(start=1,end=48502))
-  lambda_bins <- unlist(slidingWindows(lambda_chroms,width=20,step=10))
-  names(lambda_bins) <- as.character(lambda_bins)
-  
-  
-  # Import bw files
-  human_bw_files  <- BigWigFileList(dir('results/bw',full.names=T,pattern='_spec1.bw$'))
-  lambda_bw_files <- BigWigFileList(dir('results/bw',full.names=T,pattern='_spec2.bw$'))
-  # human_bw <- bplapply(human_bw_files,import,as='RleList')
-  # human_bw <- lapply(human_bw,'[',seqlevels(human_bins))
-  # lambda_bw <- bplapply(lambda_bw_files,import,as='RleList')
-  # lambda_bw <- lapply(lambda_bw,'[',seqlevels(lambda_bins))
-  # STOPPING POINT
-  # saveRDS(human_bw,'human_bw.RDS')
-  # saveRDS(lambda_bw,'lambda_bw.RDS')
-  human_bw <- readRDS('human_bw.RDS')
-  lambda_bw <- readRDS('lambda_bw.RDS')
-  
-  
-  # Compute counts
-  lambda_counts <- bplapply(lambda_bw,function(i) {
-    as.integer(binnedAverage(bins=lambda_bins,numvar=i,varname='x')$x * width(lambda_bins))
+  # Dot Plot
+  dp.dat <- lapply(cs.names,function(i) {
+    cs.i <- cs[cs$name==i]
+    cs.i <- cs.i[seqnames(cs.i) %in% sl]
+    seqlevels(cs.i) <- seqlevelsInUse(cs.i)
+    seqinfo(cs.i) <- seqinfo(dsr)
+    # sanity check
+    stopifnot(isDisjoint(cs.i))
+    # find fraction of bps annotated to a chromatin state that overlap top DSRs
+    total_cs_bases <- sum(width(cs.i))
+    cs_bases_overlapping_dsr <- sum(sum(coverage(cs.i)[top_dsr]))
+    frac <- cs_bases_overlapping_dsr / total_cs_bases
+    # median lesion log2FC in 50kb windows that overlap chromatin state
+    ol <- findOverlaps(dsr,cs.i,type='any')
+    hits <- dsr[unique(queryHits(ol))]
+    meds <- median(hits$mcols.log2FoldChange)
+    list(frac=frac,meds=meds)
   })
-  lambda_counts <- do.call(cbind,lambda_counts)
-  colnames(lambda_counts) <- unlist(strsplit(basename(lambda_bw_files),'_possort_markdup_spec2.bw'))
-  row.names(lambda_counts) <- names(lambda_bins)
-  human_counts <- bplapply(human_bw,function(i) {
-    as.integer(binnedAverage(bins=human_bins,numvar=i,varname='x')$x * width(human_bins))
+  dp.dat2 <- as.data.frame(do.call(rbind,dp.dat))
+  dp.dat2 <- as.data.frame(apply(dp.dat2,2,unlist))
+  dp.dat2$chromatin_state <- factor(cs.names)
+  dp.dat2$chromatin_state <- factor(dp.dat2$chromatin_state,levels=dp.dat2[order(dp.dat2$frac),]$chromatin_state)
+  dp.dat2$frac <- as.numeric(dp.dat2$frac)
+  dp.dat2$meds <- as.numeric(dp.dat2$meds)
+  ggplot(dp.dat2,aes(x=chromatin_state,y=frac)) +
+    geom_point(aes(color=meds,size=10)) + 
+    scale_color_continuous(type='viridis') + 
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  
+  
+  
+  # Heatmap
+  dat <- lapply(cs.names,function(i) {
+    cs.cov <- coverage(cs[cs$name==i])
+    cs.cov <- cs.cov[sl]
+    composite_plot(x=top_dsr,var=cs.cov,num_bins=10,upstream=500e3,downstream=500e3,ignore.strand = T)
   })
-  human_counts <- do.call(cbind,human_counts)
-  colnames(human_counts) <- unlist(strsplit(basename(human_bw_files),'_possort_markdup_spec1.bw'))
-  row.names(human_counts) <- names(human_bins)
-  
-  
-  # Construct SummarizedExperiment object
-  # sanity check
-  stopifnot(colnames(human_counts) == coldata$library_ID)
-  stopifnot(colnames(lambda_counts) == coldata$library_ID)
-  counts <- rbind(human_counts,lambda_counts)
-  bins <- suppressWarnings(c(human_bins,lambda_bins))
-  se <- SummarizedExperiment(assays=list(counts=counts),
-                             rowRanges=bins,
-                             colData=coldata)
-  # STOPPING POINT
-  # # saveRDS(se,'se_020623.RDS')
-  # # se <- readRDS('se_020623.RDS')
-  
-  
-  # Estimate Size Factors from spike-in
-  dds <- DESeqDataSet(se,design=~batch+condition)
-  dds$condition <- relevel(dds$condition,ref='IMR_200J_UVB') # set reference level
-  controls <- grepl('^chrL:',row.names(se))
-  dds <- estimateSizeFactors(dds,type='ratio',locfunc=median,controlGenes=controls) # can be ratio, poscounts, or iterate
-  
-  
-  # Differential susceptibility analysis
-  dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
-  dds <- DESeq(dds,parallel=TRUE)
-  
-  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
-  res <- results(dds,contrast=Contrast)
-  res$chromatin_state <- as.factor(sapply(strsplit(row.names(res),'_'),'[',3))
-  res$effect <- -1*log10(res$padj)*sign(res$log2FoldChange)
-  
-  ggplot(as.data.frame(res),aes(x=chromatin_state,y=effect)) +
-    geom_violin()
-  
-  ggplot(as.data.frame(res),aes(x=chromatin_state,y=log2FoldChange)) +
-    geom_violin()
+  names(dat) <- cs.names
+  mat <- do.call(rbind,dat)
+  pheatmap(mat,cluster_cols=F,scale='row')
   
   
   
-  # PCA
-  dds <- dds[,dds$condition %in% samples_to_plot]
-  dds$condition <- droplevels(dds$condition)
-  rld <- rlog(dds, blind=TRUE)
-  mat <- assay(rld)
-  mm <- model.matrix(~condition,colData(rld))
-  mat <- limma::removeBatchEffect(mat,batch=rld$batch,design=mm)
-  assay(rld) <- mat
-  ntop <- round(0.1*nrow(dds)) # top 10%
-  plotPCA(rld,ntop=ntop)
+  # Profile plot
+  composite_plot(x=top_dsr,var=coverage(cs[cs$name=='9_Het'])[sl],num_bins=10,upstream=500e3,downstream=500e3,ignore.strand=T,spar=1)
   
   
-  # Results
-  #Contrast <- c('condition','WI38_200J_UVB','IMR_200J_UVB')
-  #Contrast <- c('condition','Keratinocytes_200J_UVB','IMR_200J_UVB')
-  #Contrast <- c('condition','Melanocytes_200J_UVB','IMR_200J_UVB')
-  #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
-  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
-  res <- results(dds,contrast=Contrast)
-  resASH <- lfcShrink(dds, contrast=Contrast, type='ashr') # log fold-change shrinkage for visualizations
-  resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
-  #resASH <- resASH[complete.cases(resASH),] # filtering
-  DSR_thresh <- c(0.00001,1)
-  resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
-  resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
   
   
-  # MA and Volcano plots (with spike-ins)
-  pm1 <- ggplot(as.data.frame(resASH),aes(x=baseMean,y=log2FoldChange)) +
-    geom_point(aes(fill=lambda_control,color=DSR),pch=21) +
-    scale_color_manual(values=c('gray','#FC9272')) +
-    scale_fill_manual(values=c('gray','dodgerblue')) +
-    geom_hline(yintercept=c(-1,1),linetype='dashed') +
-    scale_x_continuous(trans='log10',limits=c(0.01,15000)) +
-    ylim(c(-4,4)) +
-    labs(color='lambda control') +
-    xlab('mean susceptibility') +
-    ylab('log fold-change') +
-    guides(color='none',fill='none') +
-    theme_bw()
-  pv2 <- ggplot(as.data.frame(resASH),aes(x=log2FoldChange,y=minus_log10_pval)) +
-    #geom_point(aes(color=DSR)) +
-    geom_point(aes(fill=lambda_control,color=DSR),pch=21) +
-    scale_color_manual(values=c('gray','#FC9272')) +
-    scale_fill_manual(values=c('gray','dodgerblue')) +
-    xlim(c(-4,4)) +
-    ylim(c(0,20)) +
-    ylab('-log10(pvalue)') +
-    geom_hline(yintercept = -log10(DSR_thresh[1]), linetype='dashed') +
-    geom_vline(xintercept = c(-1*DSR_thresh[2],DSR_thresh[2]), linetype='dashed') + 
-    theme_bw()
-  DSR_plots <- ggarrange(pm1,pv2,ncol=2,widths=c(1,1.5))
-  annotate_figure(DSR_plots,top=paste(Contrast[2],'vs',Contrast[3]))
+
   
   
   
@@ -203,55 +91,3 @@
   
   
   
-  
-  
-  # # Spike in plots
-  # ps1 <- ggplot(as.data.frame(resASH),aes(x=baseMean,y=log2FoldChange)) +
-  #   geom_point(aes(color=lambda_control)) +
-  #   geom_hline(yintercept=c(-1,1),linetype='dashed') +
-  #   scale_color_manual(values=c('gray','#9ECAE1')) +
-  #   scale_x_continuous(trans='log10',limits=c(0.01,15000)) +
-  #   ylim(c(-3,3)) +
-  #   labs(color='lambda control') +
-  #   xlab('mean susceptibility') +
-  #   ylab('log fold-change') +
-  #   guides(color='none') +
-  #   theme_bw()
-  # ps2 <- ggplot(as.data.frame(resASH),aes(x=log2FoldChange,y=minus_log10_pval)) +
-  #   geom_point(aes(color=lambda_control)) +
-  #   scale_color_manual(values=c('gray','#9ECAE1')) +
-  #   xlim(c(-4,4)) +
-  #   ylim(c(0,20)) +
-  #   ylab('-log10(pvalue)') +
-  #   geom_hline(yintercept = -log10(DSR_thresh[1]), linetype='dashed') +
-  #   geom_vline(xintercept = c(-1*DSR_thresh[2],DSR_thresh[2]), linetype='dashed') + 
-  #   theme_bw()
-  # spike_plots <- ggarrange(ps1,ps2,ncol=2,widths=c(1,1.5))
-  # annotate_figure(spike_plots,top=paste(Contrast[2],'vs',Contrast[3]))
-  # 
-  # 
-  # # MA and Volcano plots
-  # pm1 <- ggplot(as.data.frame(resASH),aes(x=baseMean,y=log2FoldChange)) +
-  #   geom_point(aes(color=DSR)) +
-  #   geom_hline(yintercept=c(-1,1),linetype='dashed') +
-  #   scale_color_manual(values=c('gray','#FC9272')) +
-  #   scale_x_continuous(trans='log10',limits=c(0.01,15000)) +
-  #   ylim(c(-3,3)) +
-  #   labs(color='lambda control') +
-  #   xlab('mean susceptibility') +
-  #   ylab('log fold-change') +
-  #   guides(color='none') +
-  #   theme_bw()
-  # pv2 <- ggplot(as.data.frame(resASH),aes(x=log2FoldChange,y=minus_log10_pval)) +
-  #   geom_point(aes(color=DSR)) +
-  #   #geom_point(aes(fill=lambda_control,color=DSR),pch=21) +
-  #   scale_color_manual(values=c('gray','#FC9272')) +
-  #   #scale_fill_manual(values=c('gray','dodgerblue')) +
-  #   xlim(c(-4,4)) +
-  #   ylim(c(0,20)) +
-  #   ylab('-log10(pvalue)') +
-  #   geom_hline(yintercept = -log10(DSR_thresh[1]), linetype='dashed') +
-  #   geom_vline(xintercept = c(-1*DSR_thresh[2],DSR_thresh[2]), linetype='dashed') + 
-  #   theme_bw()
-  # DSR_plots <- ggarrange(pm1,pv2,ncol=2,widths=c(1,1.5))
-  # annotate_figure(DSR_plots,top=paste(Contrast[2],'vs',Contrast[3]))
