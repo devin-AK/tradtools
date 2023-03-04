@@ -7,6 +7,9 @@
   library(ggplot2)
   
   
+  # Note, composite_plot and other functions in roadmap_epigenomics.R
+  
+  
   # Import data
   # chromatin states
   si <- seqinfo(Hsapiens)
