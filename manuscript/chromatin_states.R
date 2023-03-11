@@ -29,7 +29,7 @@
   dsr <- resASH[complete.cases(mcols(resASH)),]
   dsr <- dsr[order(dsr$mcols.padj),]
   #top_dsr <- dsr[dsr$padj < 0.0001,]
-  dsr.up <- dsr[dsr$mcols.log2FoldChange>0,]
+  #dsr.up <- dsr[dsr$mcols.log2FoldChange>0,]
   top_dsr <- dsr[1:10000]
   sl <- seqlevels(si)
   
