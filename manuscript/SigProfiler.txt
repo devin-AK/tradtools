@@ -1,0 +1,25 @@
+# First, use R to create MAF files
+setwd('/work/data/trad/')
+  
+  library(maftools)
+  
+  
+  # convert ssm to maf
+  maf <- maftools::icgcSimpleMutationToMAF(icgc='dcc/simple_somatic_mutation.open.SKCA-BR.tsv.gz',
+                                    basename='SKCA-BR',
+                                    removeDuplicatedVariants=TRUE)
+  
+  maf <- maftools::icgcSimpleMutationToMAF(icgc='dcc/simple_somatic_mutation.open.MELA-AU.tsv.gz',
+                                           basename='MELA-AU',
+                                           removeDuplicatedVariants=TRUE)
+
+
+# Then, use python SigProfiler from on https://github.com/AlexandrovLab/SigProfilerMatrixGenerator
+
+python3.7 -m pip install SigProfilerMatrixGenerator
+
+python3.7
+>>> from SigProfilerMatrixGenerator import install as genInstall
+>>> genInstall.install('GRCh37', rsync=False, bash=True)
+>>> from SigProfilerMatrixGenerator.scripts import SigProfilerMatrixGeneratorFunc as matGen
+>>> matrices = matGen.SigProfilerMatrixGeneratorFunc("sigprofiler", "GRCh37", "/work/data/trad/sigprofiler/MELA-AU.maf",plot=True, exome=False, bed_file=None, chrom_based=False, tsb_stat=False, seqInfo=True, cushion=100)
