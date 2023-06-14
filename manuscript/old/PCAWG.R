@@ -13,6 +13,80 @@
   library(pheatmap)
   library(RColorBrewer)
   
+  
+  ### Define key files
+  # MAF files
+  tcga_maf <- 'MAF/final_consensus_passonly.snv_mnv_indel.tcga.controlled.maf.gz' # downloaded from https://dcc.icgc.org/releases/PCAWG/consensus_snv_indel
+  icgc_maf <- 'MAF/final_consensus_passonly.snv_mnv_indel.icgc.public.maf.gz' # downloaded from https://dcc.icgc.org/releases/PCAWG/consensus_snv_indel
+  # SSM files
+  skca_br_ssm <- 'SSM/simple_somatic_mutation.open.SKCA-BR.tsv.gz' # downloaded from https://dcc.icgc.org/api/v1/download?fn=/current/Projects/SKCA-BR/simple_somatic_mutation.open.SKCA-BR.tsv.gz
+  mela_au_ssm <- 'SSM/simple_somatic_mutation.open.MELA-AU.tsv.gz' # downloaded from https://dcc.icgc.org/api/v1/download?fn=/current/Projects/MELA-AU/simple_somatic_mutation.open.MELA-AU.tsv.gz
+  # Miscellany
+  blacklist <-
+  mappability <- 
+  
+  ### Convert SSM files to MAF
+    
+  convert_maf_to_granges <- function(maf, ouput_file=NULL) {
+    require(maftools)
+    require(GenomicRanges)
+    require(data.table)
+    if(is.character(maf)) {
+      maf <- maftools::read.maf(maf,useAll=TRUE,removeDuplicatedVariants=TRUE)
+    }
+    stopifnot(is(maf,'MAF'))
+    if(!is.null(output_file)) {
+      ext <- tools::file_ext(output_file)
+      if(nchar(ext)==0) output_file <- paste0(output_file,'.RDS')
+      stopifnot(toupper(tools::file_ext(output_file)=='RDS'))
+    }
+    stopifnot(identical(colnames(maf@data),colnames(maf@maf.silent)))
+    maf <- rbind(maf@data,maf@maf.silent)
+    stopifnot(is(maf,'data.table'))
+    stopifnot(identical(maf$Reference_Allele,maf$Tumor_Seq_Allele1))
+    cn <- colnames(maf)
+    cols <- c('project_code','donor_id','tumor_sample_barcode','reference_allele','tumor_seq_allele2','variant_type')
+    stopifnot(all(sapply(cols,function(i)sum(grepl(i,cn,ignore.case=TRUE))==1)))
+    cols_to_keep <- sapply(cols,function(i)grep(i,cn,ignore.case=TRUE))
+    MCOLS <- maf[,cols_to_keep,with=FALSE]
+    MCOLS[,Genome_Change := paste(Reference_Allele,Tumor_Seq_Allele2,sep='>')]
+    MCOLS <- as(MCOLS,'DataFrame')
+    maf <- GRanges(seqnames=maf$Chromosome,ranges=IRanges(start=maf$Start_Position,end=maf$End_Position),strand=maf$Strand)
+    mcols(maf) <- MCOLS
+    if(!is.null(output_file)) {
+      saveRDS(maf,file=output_file)
+    } else {
+      return(maf)
+    }
+  }
+  
+  
+  mut <- GRanges(seqnames=maf$Chromosome,ranges=IRanges(start=maf$Start_position,end=maf$End_position),strand=maf$Strand,
+                 Project_Code=maf$Project_Code,
+                 Donor_ID=maf$Donor_ID,
+                 Tumor_Sample_Barcode=maf$Tumor_Sample_Barcode,
+                 Genome_Change=maf$Genome_Change,
+                 Reference_Allele=maf$Reference_Allele,
+                 Tumor_Seq_Allele2=maf$Tumor_Seq_Allele2,
+                 Variant_Type=maf$Variant_Type)
+  seqlevelsStyle(mut) <- 'UCSC'
+  mut <- sortSeqlevels(mut)
+  seqinfo(mut) <- seqinfo(BSgenome.Hsapiens.UCSC.hg19::Hsapiens)
+  mut <- keepSeqlevels(mut,seqlevels(mut)[1:23],pruning.mode='coarse')
+  
+  
+
+  
+  # maf1 <- maftools::icgcSimpleMutationToMAF(icgc='dcc/simple_somatic_mutation.open.SKCA-BR.tsv.gz',
+  #                                          basename='SKCA-BR',
+  #                                          removeDuplicatedVariants=TRUE)
+  # 
+  # maf2 <- maftools::icgcSimpleMutationToMAF(icgc='dcc/simple_somatic_mutation.open.MELA-AU.tsv.gz',
+  #                                          basename='MELA-AU',
+  #                                          removeDuplicatedVariants=TRUE)
+  
+  maf_file <- 'SKCA-BR.maf.gz'
+  maf <- fread(maf_file)
 
   
   
@@ -52,6 +126,9 @@
   mut <- keepSeqlevels(mut,seqlevels(mut)[1:23],pruning.mode='coarse')
   #saveRDS(mut,file='TCGA_maf.RDS')
   rm(maf); gc()
+  
+  
+  
   #mut <- readRDS('TCGA_maf.RDS')
   
   mela <- mut[mut$Project_Code=='Skin-Melanoma' & mut$Variant_Type=='SNP']
@@ -468,5 +545,9 @@
     bins
   }
   
+  
+  
+  ggplot(pivot_longer(ms2,-Sample.Names),aes(x=Sample.Names,y=value,fill=name)) +
+           geom_bar(stat='identity',position='fill')
   
  

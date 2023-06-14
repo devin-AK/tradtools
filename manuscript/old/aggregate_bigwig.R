@@ -49,7 +49,7 @@
   
   
   
-  aggregate_bigwig <- function(bed_file, bigwig_file, bin_size=10, flanking=0, ignore.strand=TRUE, verbose=TRUE) {
+  aggregate_bigwig1 <- function(bed_file, bigwig_file, bin_size=10, flanking=0, ignore.strand=TRUE, verbose=TRUE) {
     require(rtracklayer)
     require(GenomicRanges)
     require(data.table)
@@ -87,6 +87,71 @@
     res <- colSums(matrix(unlist(dat.chr),ncol=ntile,byrow=TRUE))
     if(verbose) message('\nDONE.')
     return(res)
+  }
+  
+  
+  
+  aggregate_bigwig <- function(bed_file, bigwig_file, bin_size=10, flanking=0, ignore.strand=TRUE, verbose=TRUE) {
+    require(rtracklayer)
+    require(GenomicRanges)
+    require(data.table)
+    # check inputs
+    if(!ignore.strand) stop('Strand awareness not currently supported')
+    stopifnot('bin_size must be numeric'=is.numeric(bin_size))
+    stopifnot('flanking must be numeric'=is.numeric(flanking))
+    if(is.character(bigwig_file)) {
+      stopifnot('bigwig_file does not exist. Double check PATH and make sure file is present at that location'=file.exists(bigwig_file))
+      stopifnot('bigwig_file must be a BigWig file (file extension .bw or .bigwig)'=tolower(tools::file_ext(bigwig_file)) %in% c('bw','bigwig'))
+      bigwig_preloaded <- FALSE
+    } else {
+      stopifnot('If bigwig_file is an R object, it must be RleList object (e.g. made with coverage()'=inherits(bigwig_file,'RleList'))
+      bigwig_preloaded <- TRUE
+    }
+    if(is.character(bed_file)) {
+      # Import bed 
+      if(verbose) message('Importing BED file ',basename(bed_file))
+      x <- rtracklayer::import.bed(bed_file)
+    } else {
+      x <- bed_file
+    }
+    stopifnot('supplied bed_file must be GRanges object or a PATH to a valid BED file that can be imported'=inherits(x,'GRanges'))
+    # Process
+    wx <- width(x)
+    mwx <- median(wx)
+    if(!all(wx==mwx)) stop('All ranges in bed_file must be same width')
+    # Resize bed (flanking sequence)
+    if(flanking != 0) {
+      nw <- mwx + 2*flanking
+      x <- GenomicRanges::resize(x, width=nw, fix='center', use.names=FALSE, ignore.strand=TRUE)
+    } else {
+      nw <- mwx
+    }
+    # Process by chromosome
+    chr <- seqlevels(x)
+    ntile <- round(nw / bin_size)
+    dat.chr <- lapply(chr,function(i) {
+      if(verbose) message('Processing ',i,'     \r',appendLF=FALSE)
+      flush.console()
+      xi <- x[seqnames(x)==i]
+      if(bigwig_preloaded) {
+        vari <- bigwig_file[[i]]
+      } else {
+        vari <- rtracklayer::import(bigwig_file,which=xi,as='RleList')
+        vari <- vari[[i]]
+      }
+      ti <- tile(ranges(xi,use.names=FALSE),n=ntile)
+      ti <- unlist(ti)
+      v <- Views(vari,ti)
+      vs <- viewSums(v,na.rm=TRUE)
+      dt <- data.table(matrix(vs,ncol=ntile,byrow=TRUE))
+      unname(colSums(dt))
+    })
+    sums <- colSums(matrix(unlist(dat.chr),ncol=ntile,byrow=TRUE))
+    avg_per_bin <- sums / length(x)
+    # calculate average per bp
+    avg_per_bp <- avg_per_bin / bin_size
+    if(verbose) message('\nDONE.')
+    return(avg_per_bp)
   }
   
   

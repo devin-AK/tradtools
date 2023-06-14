@@ -13,6 +13,10 @@
   library(ggpubr)
   library(pheatmap)
   library(RColorBrewer)
+  library(factoextra)
+  library(NbClust)
+  
+  
   
   # System specific parameters
   #setwd('/work/data/trad/')
@@ -27,10 +31,12 @@
   coldata[] <- lapply(coldata,factor)
   
   
+  
   # Define parameters
   binSize <- 50e3 # sliding window width (in bp)
   binStep <- 50e3 # sliding window step (in bp)
   samples_to_plot <- c('IMR_100J_UVC','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','WI38_200J_UVB','TP53_200J_UVB','WI38RAF_200J_UVB')
+  colors <- setNames(brewer.pal(n=length(samples_to_plot),'Paired'),samples_to_plot)
   
   
   # Define genome bins
@@ -41,6 +47,7 @@
   lambda_chroms <- GRanges(seqnames='chrL',ranges=IRanges(start=1,end=48502))
   lambda_bins <- unlist(slidingWindows(lambda_chroms,width=20,step=10))
   names(lambda_bins) <- as.character(lambda_bins)
+  
   
   
   # # Import bw files
@@ -55,6 +62,7 @@
   #saveRDS(lambda_bw,'lambda_bw.RDS')
   human_bw <- readRDS('human_bw.RDS')
   lambda_bw <- readRDS('lambda_bw.RDS')
+  
   
   
   # Compute counts
@@ -72,6 +80,7 @@
   row.names(human_counts) <- names(human_bins)
   
   
+  
   # Construct SummarizedExperiment object
   # sanity check
   stopifnot(colnames(human_counts) == coldata$library_ID)
@@ -86,16 +95,79 @@
   # # se <- readRDS('se_020623.RDS')
   
   
+  
   # Estimate Size Factors from spike-in
   dds <- DESeqDataSet(se,design=~batch+condition)
   dds$condition <- relevel(dds$condition,ref='IMR_200J_UVB') # set reference level
   controls <- grepl('^chrL:',row.names(se))
-  dds <- estimateSizeFactors(dds,type='ratio',locfunc=median,controlGenes=controls) # can be ratio, poscounts, or iterate
+  dds <- estimateSizeFactors(dds,type='ratio',locfunc=median,controlGenes=controls)
+  
   
   
   # Differential susceptibility analysis
   dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
   dds <- DESeq(dds,parallel=TRUE)
+  dds <- dds[,dds$condition %in% samples_to_plot]
+  dds$condition <- droplevels(dds$condition)
+  
+  
+  
+  # PCA
+  rld <- rlog(dds, blind=TRUE)
+  mat <- assay(rld)
+  mm <- model.matrix(~condition,colData(rld))
+  mat <- limma::removeBatchEffect(mat,batch=rld$batch,design=mm)
+  assay(rld) <- mat
+  ntop <- round(0.1*nrow(dds)) # top 10%
+  p.pca <- plotPCA(rld,ntop=ntop) +
+          ggtitle('PCA',subtitle=paste('bin size:',binSize)) +
+          scale_color_manual(values=colors) +
+          theme_minimal(base_size=7)
+  p.pca
+  LEGEND <- get_legend(p.pca)
+  as_ggplot(LEGEND)
+  
+  
+  
+  
+  # Cluster analysis
+  rv <- rowVars(assay(rld))
+  select <- order(rv, decreasing = TRUE)[seq_len(min(ntop,length(rv)))]
+  pca <- prcomp(t(assay(rld)[select, ]))
+  p.clus <- fviz_eig(pca) +
+    theme_minimal(base_size=7)
+  
+  
+  
+  # Export pdf 2in x 2in
+  pdf(file=paste0('figures/DSRs/binSize_',binSize,'.pdf'),width=4,height=1.4)
+    ggarrange(p.pca + theme(legend.position='none'),p.clus,ncol=2)
+  dev.off()
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  # sampleDists <- dist(t(assay(rld)))
+  # sampleDistMatrix <- as.matrix(sampleDists)
+  # rownames(sampleDistMatrix) <- paste(rld$condition, rld$type, sep="-")
+  # colnames(sampleDistMatrix) <- NULL
+  # colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+  # pheatmap(sampleDistMatrix,
+  #          clustering_distance_rows=sampleDists,
+  #          clustering_distance_cols=sampleDists,
+  #          col=colors)
+  
+  
+  
+
   Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
   #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
   #Contrast <- c('condition','WI38_200J_UVB','IMR_200J_UVB')
@@ -117,23 +189,6 @@
   #saveRDS(resASH,file='TP53_resASH.RDS')
   
   
-  # PCA
-  dds <- dds[,dds$condition %in% samples_to_plot]
-  dds$condition <- droplevels(dds$condition)
-  rld <- rlog(dds, blind=TRUE)
-  mat <- assay(rld)
-  mm <- model.matrix(~condition,colData(rld))
-  mat <- limma::removeBatchEffect(mat,batch=rld$batch,design=mm)
-  assay(rld) <- mat
-  ntop <- round(0.1*nrow(dds)) # top 10%
-  plotPCA(rld,ntop=ntop)
   
-  sampleDists <- dist(t(assay(rld)))
-  sampleDistMatrix <- as.matrix(sampleDists)
-  rownames(sampleDistMatrix) <- paste(rld$condition, rld$type, sep="-")
-  colnames(sampleDistMatrix) <- NULL
-  colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-  pheatmap(sampleDistMatrix,
-           clustering_distance_rows=sampleDists,
-           clustering_distance_cols=sampleDists,
-           col=colors)
+  # PCA
+
