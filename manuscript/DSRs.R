@@ -1,9 +1,26 @@
 
+  # Define parameters
+  rm(list=ls())
+  gc()
+  samples_to_plot <- c('WI38_200J_UVB','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','IMR_100J_UVC','TP53_200J_UVB')
+  colors <- setNames(brewer.pal(n=length(samples_to_plot),'Paired'),samples_to_plot)
+  #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
+  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
+  pre_filter_threshold <- 100
+  DSR_thresh <- c(0.00001,1)
+  include_spike_reads <- TRUE
+  binSize <- 50e3 # sliding window width (in bp)
+  binStep <- 50e3 # sliding window step (in bp)
+
+
+
   # Load packages
   library(openxlsx)
   library(DESeq2)
   library(rtracklayer)
   library(GenomicRanges)
+  library(circlize)
+  library(data.table)
   library(BSgenome.Hsapiens.UCSC.hg19)
   library(BiocParallel)
   library(limma)
@@ -15,6 +32,122 @@
   library(RColorBrewer)
   library(factoextra)
   library(NbClust)
+  library(ggrastr)
+  
+  
+  # Define functions
+  count_DSRs_in_tiles <- function(dsr, tiles, padj_thresh=0.05, log2fc_thresh=1) {
+    stopifnot(is(dsr,'GRanges'))
+    stopifnot(is(tiles,'GRanges'))
+    stopifnot(!is.null(dsr$padj))
+    stopifnot(!is.null(dsr$log2FoldChange))
+    # process
+    dsr.up <- dsr[dsr$padj < padj_thresh & dsr$log2FoldChange > abs(log2fc_thresh)]
+    dsr.dn <- dsr[dsr$padj < padj_thresh & dsr$log2FoldChange < -1*(abs(log2fc_thresh))]
+    counts.up <- countOverlaps(tiles,dsr.up,type='any',ignore.strand=TRUE)
+    counts.dn <- countOverlaps(tiles,dsr.dn,type='any',ignore.strand=TRUE)
+    bed <- data.frame(chr=seqnames(tiles),start=start(tiles),end=end(tiles),up=counts.up,dn=counts.dn)
+    return(bed)
+  }
+  
+  
+  
+  DSR_plot3 <- function(bed, col_range=c(0,30), ylim=col_range, outline_points=F, hline_interval=5, cex_modifier=1, bg.border=NA) {
+    require(circlize)
+    require(RColorBrewer)
+    # Initialize
+    circos.par(cell.padding = c(0, 0, 0, 0),gap.after=2,start.degree=90,'track.height'=0.3)
+    circos.initializeWithIdeogram(chromosome.index = paste0("chr", 1:22),plotType=c('ideogram','labels'),axis.labels.cex=cex_modifier*0.4,labels.cex=cex_modifier*0.8)
+    # up
+    bed_up <- bed[,1:4]
+    color_ramp_up <- brewer.pal(9,'Reds')[3:7]
+    col_breaks_up <- seq(col_range[1],col_range[2],length.out=length(color_ramp_up)+1)
+    col_breaks_up[1] <- min(min(bed_up[,4]),col_range[1])
+    col_breaks_up[length(col_breaks_up)] <- max(max(bed_up[,4]),col_range[2])
+    circos.genomicTrack(bed_up, panel.fun = function(region, value, ...) {
+      for(h in seq(min(ylim),max(ylim),by=hline_interval)) {
+        circos.lines(CELL_META$cell.xlim,c(h,h),lty=2,lwd=0.25,col='#AAAAAA')
+      }
+      v <- value[[1]]
+      minv <- min(v)
+      maxv <- max(v)
+      cex <- (v - minv)/(maxv - minv)
+      cex <- cex * cex_modifier
+      breaks_up <- cut(v,breaks=col_breaks_up,include.lowest=T)
+      names(color_ramp_up) <- levels(breaks_up)
+      cols_up <- unname(color_ramp_up[breaks_up])
+      if(outline_points) circos.genomicPoints(region, value, cex=cex, pch = 21, bg = cols_up, ...) else {
+        circos.genomicPoints(region, value, cex=cex, pch = 16, col = cols_up, ...)
+      }
+    }, ylim = ylim, bg.border=bg.border, bg.col=add_transparency('#DE2D26',0.95))
+    # middle border
+    circos.track(ylim = c(0, 1), track.height = 0.01, bg.border=NA, bg.col='gray40')
+    # dn
+    bed_dn <- cbind(bed[,1:3],bed[,5])
+    color_ramp_dn <- brewer.pal(9,'Blues')[3:7]
+    col_breaks_dn <- seq(col_range[1],col_range[2],length.out=length(color_ramp_dn)+1)
+    col_breaks_dn[1] <- min(min(bed_dn[,4]),col_range[1])
+    col_breaks_dn[length(col_breaks_dn)] <- max(max(bed_dn[,4]),col_range[2])
+    circos.genomicTrack(bed_dn, panel.fun = function(region, value, ...) {
+      for(h in -1*seq(min(ylim),max(ylim),by=hline_interval)) {
+        circos.lines(CELL_META$cell.xlim,c(h,h),lty=2,lwd=0.25,col='#AAAAAA')
+      }
+      v <- value[[1]]
+      minv <- min(v)
+      maxv <- max(v)
+      cex <- (v - minv)/(maxv - minv)
+      cex <- cex * cex_modifier
+      breaks_dn <- cut(v,breaks=col_breaks_dn,include.lowest=T)
+      names(color_ramp_dn) <- levels(breaks_dn)
+      cols_dn <- unname(color_ramp_dn[breaks_dn])
+      v_dn <- v*-1
+      if(outline_points) circos.genomicPoints(region, v_dn, cex=cex, pch = 21, bg = cols_dn, ...) else {
+        circos.genomicPoints(region, v_dn, cex=cex, pch = 16, col = cols_dn, ...)
+      }
+    }, ylim = rev(ylim)*-1, bg.border=bg.border, bg.col=add_transparency('#3182BD',0.95))
+    circos.clear()
+  }
+  
+  
+  
+  
+  plotDispEsts2 <- function(dds){
+    require(dplyr)
+    require(reshape2)
+    require(ggplot2)
+    as.data.frame(mcols(dds)) %>% 
+      select(baseMean, dispGeneEst, dispFit, dispersion) %>% 
+      melt(id.vars="baseMean") %>% 
+      filter(baseMean>0) %>% 
+      ggplot(aes(x=baseMean, y=value, colour=variable)) + 
+      rasterize(geom_point(size=0.1),dpi=600) +
+      scale_x_log10() + 
+      scale_y_log10() + 
+      theme_bw() + 
+      ylab("Dispersion") + 
+      xlab("BaseMean") +
+      scale_colour_manual(
+        values=c("Black", "#e41a1c", "#377eb8"), 
+        breaks=c("dispGeneEst", "dispFit", "dispersion"), 
+        labels=c("Estimate", "Fit", "Final"),
+        name=""
+      ) +
+      guides(colour = guide_legend(override.aes = list(size=2)))
+  }
+  
+  
+  
+  remove_geoms <- function(x, geom_type) {
+    # Find layers that match the requested type.
+    selector <- sapply(x$layers,
+                       function(y) {
+                         class(y$geom)[1] == geom_type
+                       })
+    # Delete the layers.
+    x$layers[selector] <- NULL
+    x
+  }
+  
   
   
   
@@ -29,14 +162,9 @@
   # Import metadata
   coldata <- read.xlsx('bigwig_summary.xlsx')
   coldata[] <- lapply(coldata,factor)
-  
-  
-  
-  # Define parameters
-  binSize <- 50e3 # sliding window width (in bp)
-  binStep <- 50e3 # sliding window step (in bp)
-  samples_to_plot <- c('IMR_100J_UVC','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','WI38_200J_UVB','TP53_200J_UVB','WI38RAF_200J_UVB')
-  colors <- setNames(brewer.pal(n=length(samples_to_plot),'Paired'),samples_to_plot)
+  coldata$condition <- factor(coldata$condition,levels=samples_to_plot)
+  coldata$condition <- droplevels(coldata$condition)
+
   
   
   # Define genome bins
@@ -50,7 +178,7 @@
   
   
   
-  # # Import bw files
+  # Import bw files
   human_bw_files  <- BigWigFileList(dir('results/bw',full.names=T,pattern='_spec1.bw$'))
   lambda_bw_files <- BigWigFileList(dir('results/bw',full.names=T,pattern='_spec2.bw$'))
   #human_bw <- bplapply(human_bw_files,import,as='RleList')
@@ -90,6 +218,7 @@
   se <- SummarizedExperiment(assays=list(counts=counts),
                              rowRanges=bins,
                              colData=coldata)
+  se <- se[,se$condition %in% samples_to_plot]
   # STOPPING POINT
   # # saveRDS(se,'se_020623.RDS')
   # # se <- readRDS('se_020623.RDS')
@@ -105,10 +234,20 @@
   
   
   # Differential susceptibility analysis
-  dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
+  if(!include_spike_reads) dds <- dds[!grepl('^chrL:',row.names(se))] # remove spike-in counts
+  dds <- dds[rowSums(counts(dds)) >= pre_filter_threshold] # pre-filter
   dds <- DESeq(dds,parallel=TRUE)
   dds <- dds[,dds$condition %in% samples_to_plot]
-  dds$condition <- droplevels(dds$condition)
+  #dds$condition <- droplevels(dds$condition)
+  
+  
+  
+  # Dispersion estimates
+  # -------------------------------------------------------------------------- #
+  pdf(file='figures/DSRs/disp_est.pdf',width=4,height=2.4)
+  plotDispEsts2(dds)
+  dev.off()
+  # -------------------------------------------------------------------------- #
   
   
   
@@ -120,12 +259,17 @@
   assay(rld) <- mat
   ntop <- round(0.1*nrow(dds)) # top 10%
   p.pca <- plotPCA(rld,ntop=ntop) +
-          ggtitle('PCA',subtitle=paste('bin size:',binSize)) +
+          ggtitle(paste0('PCA (bin size: ',binSize)) +
           scale_color_manual(values=colors) +
-          theme_minimal(base_size=7)
+          theme_classic(base_size=6)
+  p.pca <- remove_geoms(p.pca,'GeomPoint') + geom_point(size=1)
   p.pca
   LEGEND <- get_legend(p.pca)
+  # -------------------------------------------------------------------------- #
+  pdf(file='figures/DSRs/LEGEND.pdf',width=4,height=4)
   as_ggplot(LEGEND)
+  dev.off()
+  # -------------------------------------------------------------------------- #
   
   
   
@@ -134,61 +278,81 @@
   rv <- rowVars(assay(rld))
   select <- order(rv, decreasing = TRUE)[seq_len(min(ntop,length(rv)))]
   pca <- prcomp(t(assay(rld)[select, ]))
-  p.clus <- fviz_eig(pca) +
-    theme_minimal(base_size=7)
-  
-  
-  
-  # Export pdf 2in x 2in
-  pdf(file=paste0('figures/DSRs/binSize_',binSize,'.pdf'),width=4,height=1.4)
-    ggarrange(p.pca + theme(legend.position='none'),p.clus,ncol=2)
+  #p.clus <- fviz_eig(pca) +
+  #  theme_minimal(base_size=7)
+  p.clus <- fviz_eig(pca,geom='line',size=0.2,linetype='dashed') +
+    theme_classic(base_size=6) +
+    scale_y_log10()
+  p.clus <- remove_geoms(p.clus,'GeomPoint')
+  # -------------------------------------------------------------------------- #
+  pdf(file=paste0('figures/DSRs/binSize_',binSize,'.pdf'),width=3,height=0.8)
+    ggarrange(p.pca + theme(legend.position='none'),p.clus,ncol=2,widths=c(2,1))
+    #ggarrange(p.pca + theme(legend.position='none'),p.clus,ncol=2,widths=c(2,1),align='hv')
   dev.off()
+  # -------------------------------------------------------------------------- #
   
   
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  # sampleDists <- dist(t(assay(rld)))
-  # sampleDistMatrix <- as.matrix(sampleDists)
-  # rownames(sampleDistMatrix) <- paste(rld$condition, rld$type, sep="-")
-  # colnames(sampleDistMatrix) <- NULL
-  # colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
-  # pheatmap(sampleDistMatrix,
-  #          clustering_distance_rows=sampleDists,
-  #          clustering_distance_cols=sampleDists,
-  #          col=colors)
-  
-  
-  
-
-  Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
-  #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
-  #Contrast <- c('condition','WI38_200J_UVB','IMR_200J_UVB')
-  #Contrast <- c('condition','KMT5BC_200J_UVB','IMR_200J_UVB')
+  # DSR results
   res <- results(dds,contrast=Contrast)
-  sum(res$padj < 0.05,na.rm=TRUE)
-  sum(res$padj < 0.05,na.rm=TRUE) / nrow(res)
-  sum(res$padj < 0.05 & res$log2FoldChange>1,na.rm=T)
-  sum(res$padj < 0.05 & res$log2FoldChange<0,na.rm=T)
-  sum(res$padj < 0.00001,na.rm=TRUE)
-  
   resASH <- lfcShrink(dds, contrast=Contrast, type='ashr') # log fold-change shrinkage for visualizations
-  #resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
+  if(include_spike_reads) resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
   #resASH <- resASH[complete.cases(resASH),] # filtering
-  #DSR_thresh <- c(0.05,1)
-  #resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
-  #resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
-  
-  #saveRDS(resASH,file='TP53_resASH.RDS')
+  resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
+  resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
   
   
   
-  # PCA
-
+  # MA and Volcano plots
+  pm1 <- ggplot(as.data.frame(resASH),aes(x=baseMean,y=log2FoldChange)) +
+    rasterize(geom_point(aes(fill=lambda_control,color=DSR),size=0.5,stroke=0.1,pch=21),dpi=600) +
+    scale_color_manual(values=c('gray','#FC9272')) +
+    scale_fill_manual(values=c('gray','#756BB1')) +
+    geom_hline(yintercept=c(-1,1),linetype='dashed') +
+    scale_x_continuous(trans='log10',limits=c(0.01,15000)) +
+    ylim(c(-4,4)) +
+    labs(color='lambda control') +
+    xlab('mean susceptibility') +
+    ylab('log fold-change') +
+    guides(color='none',fill='none') +
+    theme_bw(base_size=7)
+  pv2 <- ggplot(as.data.frame(resASH),aes(x=log2FoldChange,y=minus_log10_pval)) +
+    rasterize(geom_point(aes(fill=lambda_control,color=DSR),size=0.5,stroke=0.1,pch=21),dpi=600) +
+    scale_color_manual(values=c('gray','#FC9272')) +
+    scale_fill_manual(values=c('gray','#756BB1')) +
+    xlim(c(-4,4)) +
+    ylim(c(0,20)) +
+    ylab('-log10(pvalue)') +
+    geom_hline(yintercept = -log10(DSR_thresh[1]), linetype='dashed') +
+    geom_vline(xintercept = c(-1*DSR_thresh[2],DSR_thresh[2]), linetype='dashed') + 
+    theme_bw(base_size=7)
+  DSR_plots <- ggarrange(pm1,pv2,ncol=2,widths=c(1,1.5))
+  # -------------------------------------------------------------------------- #
+  pdf(file=paste0('figures/DSRs/ma_vol_',Contrast[2],ifelse(include_spike_reads,'_spike',''),'.pdf'),width=4,height=1.6)
+    annotate_figure(DSR_plots,top=paste(Contrast[2],'vs',Contrast[3]))
+  dev.off()
+  # -------------------------------------------------------------------------- #
+  
+  
+  
+  # Circos plots with DSR locations
+  # Define genome tiles
+  dsr <- GRanges(row.names(resASH))
+  mcols(dsr) <- DataFrame(resASH)
+  sl <- seqlengths(BSgenome.Hsapiens.UCSC.hg19::Hsapiens)
+  sl <- sl[seqlevels(dsr)]
+  sl <- sl[complete.cases(sl)]
+  tg <- tileGenome(sl,tilewidth=10e6,cut.last.tile.in.chrom=TRUE)
+  #  Count DSRs in genome tiles
+  bed <- count_DSRs_in_tiles(dsr=dsr,tiles=tg,padj_thresh=DSR_thresh[1],log2fc_thresh=DSR_thresh[2])
+  # Circos plot
+  # -------------------------------------------------------------------------- #
+  pdf(file=paste0('figures/DSRs/circos_',Contrast[2],'.pdf'),width=1.6,height=1.6)
+    DSR_plot3(bed=bed,col_range=c(0,30),ylim=c(0,200),outline_points=F,hline_interval=50,cex_modifier=0.5,bg.border=NA)
+  dev.off()
+  # -------------------------------------------------------------------------- #
+  
+  
+  
+  
+  
