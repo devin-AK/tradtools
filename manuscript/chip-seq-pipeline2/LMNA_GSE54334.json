@@ -1,0 +1,9 @@
+{
+    "chip.pipeline_type" : "tf",
+    "chip.genome_tsv" : "/work/devin/trad/lamin/genome/hg19.tsv",
+    "chip.fastqs_rep1_R1" : ["/work/devin/trad/lamin/SRR1141000.fastq.gz"],
+    "chip.ctl_fastqs_rep1_R1" : ["/work/devin/trad/lamin/SRR1141001.fastq.gz"],
+    "chip.paired_end" : false,
+    "chip.title" : "LDF_LMNA_GSE54334",
+    "chip.description" : "LMNA ChIP-Seq from normal dermal fibroblasts"
+}

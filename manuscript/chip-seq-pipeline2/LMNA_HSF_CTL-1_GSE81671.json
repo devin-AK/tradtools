@@ -1,0 +1,9 @@
+{
+    "chip.pipeline_type" : "tf",
+    "chip.genome_tsv" : "/work/devin/trad/lamin/genome/hg19.tsv",
+    "chip.fastqs_rep1_R1" : ["/work/devin/trad/lamin/SRR3554813.fastq.gz"],
+    "chip.ctl_fastqs_rep1_R1" : ["/work/devin/trad/lamin/SRR3554814.fastq.gz"],
+    "chip.paired_end" : false,
+    "chip.title" : "HSF_CTL-1_LMNA_GSE81671",
+    "chip.description" : "LMNA ChIP-Seq from primary dermal fibroblasts"
+}

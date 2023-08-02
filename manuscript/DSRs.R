@@ -4,11 +4,14 @@
   gc()
   samples_to_plot <- c('WI38_200J_UVB','IMR_200J_UVB','Keratinocytes_200J_UVB','Melanocytes_200J_UVB','IMR_100J_UVC','TP53_200J_UVB')
   colors <- setNames(brewer.pal(n=length(samples_to_plot),'Paired'),samples_to_plot)
+  #Contrast <- c('condition','WI38_200J_UVB','IMR_200J_UVB')
+  #Contrast <- c('condition','Keratinocytes_200J_UVB','IMR_200J_UVB')
+  #Contrast <- c('condition','Melanocytes_200J_UVB','IMR_200J_UVB')
   #Contrast <- c('condition','IMR_100J_UVC','IMR_200J_UVB')
   Contrast <- c('condition','TP53_200J_UVB','IMR_200J_UVB')
   pre_filter_threshold <- 100
   DSR_thresh <- c(0.00001,1)
-  include_spike_reads <- TRUE
+  include_spike_reads <- FALSE
   binSize <- 50e3 # sliding window width (in bp)
   binStep <- 50e3 # sliding window step (in bp)
 
@@ -244,9 +247,9 @@
   
   # Dispersion estimates
   # -------------------------------------------------------------------------- #
-  pdf(file='figures/DSRs/disp_est.pdf',width=4,height=2.4)
+  #pdf(file='figures/DSRs/disp_est.pdf',width=4,height=2.4)
   plotDispEsts2(dds)
-  dev.off()
+  #dev.off()
   # -------------------------------------------------------------------------- #
   
   
@@ -266,9 +269,9 @@
   p.pca
   LEGEND <- get_legend(p.pca)
   # -------------------------------------------------------------------------- #
-  pdf(file='figures/DSRs/LEGEND.pdf',width=4,height=4)
+  #pdf(file='figures/DSRs/LEGEND.pdf',width=4,height=4)
   as_ggplot(LEGEND)
-  dev.off()
+  #dev.off()
   # -------------------------------------------------------------------------- #
   
   
@@ -284,11 +287,13 @@
     theme_classic(base_size=6) +
     scale_y_log10()
   p.clus <- remove_geoms(p.clus,'GeomPoint')
+  #saveRDS(layer_data(p.clus),file=paste0('figures/DSRs/pclus_binSize_',binSize,'.RDS'))
+  #saveRDS(se,file=paste0('figures/DSRs/se_binSize_',binSize,'.RDS'))
   # -------------------------------------------------------------------------- #
-  pdf(file=paste0('figures/DSRs/binSize_',binSize,'.pdf'),width=3,height=0.8)
+  #pdf(file=paste0('figures/DSRs/binSize_',binSize,'.pdf'),width=3,height=0.8)
     ggarrange(p.pca + theme(legend.position='none'),p.clus,ncol=2,widths=c(2,1))
     #ggarrange(p.pca + theme(legend.position='none'),p.clus,ncol=2,widths=c(2,1),align='hv')
-  dev.off()
+  #dev.off()
   # -------------------------------------------------------------------------- #
   
   
@@ -296,7 +301,7 @@
   # DSR results
   res <- results(dds,contrast=Contrast)
   resASH <- lfcShrink(dds, contrast=Contrast, type='ashr') # log fold-change shrinkage for visualizations
-  if(include_spike_reads) resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
+  resASH$lambda_control <- grepl('^chrL:',row.names(resASH))
   #resASH <- resASH[complete.cases(resASH),] # filtering
   resASH$DSR <- ifelse(resASH$padj < DSR_thresh[1] & abs(resASH$log2FoldChange) > DSR_thresh[2],TRUE,FALSE)
   resASH$minus_log10_pval <- -1*log10(resASH$pvalue)
@@ -328,9 +333,9 @@
     theme_bw(base_size=7)
   DSR_plots <- ggarrange(pm1,pv2,ncol=2,widths=c(1,1.5))
   # -------------------------------------------------------------------------- #
-  pdf(file=paste0('figures/DSRs/ma_vol_',Contrast[2],ifelse(include_spike_reads,'_spike',''),'.pdf'),width=4,height=1.6)
+  #pdf(file=paste0('figures/DSRs/ma_vol_2_',Contrast[2],ifelse(include_spike_reads,'_spike',''),'.pdf'),width=4,height=1.6)
     annotate_figure(DSR_plots,top=paste(Contrast[2],'vs',Contrast[3]))
-  dev.off()
+  #dev.off()
   # -------------------------------------------------------------------------- #
   
   
@@ -347,12 +352,60 @@
   bed <- count_DSRs_in_tiles(dsr=dsr,tiles=tg,padj_thresh=DSR_thresh[1],log2fc_thresh=DSR_thresh[2])
   # Circos plot
   # -------------------------------------------------------------------------- #
-  pdf(file=paste0('figures/DSRs/circos_',Contrast[2],'.pdf'),width=1.6,height=1.6)
-    DSR_plot3(bed=bed,col_range=c(0,30),ylim=c(0,200),outline_points=F,hline_interval=50,cex_modifier=0.5,bg.border=NA)
-  dev.off()
+  #pdf(file=paste0('figures/DSRs/circos2_',Contrast[2],'.pdf'),width=1.6,height=1.6)
+    DSR_plot3(bed=bed,col_range=c(0,30),ylim=c(0,50),outline_points=F,hline_interval=10,cex_modifier=0.5,bg.border=NA)
+  #dev.off()
   # -------------------------------------------------------------------------- #
   
   
   
+  # Export supplemental files
+  #write.csv(resASH,file=paste0(Contrast[2],'-DSR_results.csv'))
   
+  
+  # Bin Size selection
+    library(stringr)
+    library(ggplot2)
+    se_files <- dir('~/Desktop/trad/figures/DSRs',pattern='se_binSize*',full.names=TRUE)
+    pclus_files <- dir('~/Desktop/trad/figures/DSRs',pattern='pclus_*',full.names=TRUE)
+    
+    se_files <- str_sort(se_files,numeric=TRUE)
+    pclus_files <- str_sort(pclus_files,numeric=TRUE)
+    
+    options(scipen=999)
+    rep_cor <- sapply(se_files,function(i) {
+      sei <- readRDS(i)
+      ci <- assay(sei)
+      splt <- strsplit(colnames(ci),'_UV[B|C]_')
+      rep <- sapply(splt,'[',2)
+      ids <- sapply(splt,'[',1)
+      corsi <- sapply(ids[seq(1,length(ids),by=2)],function(j) {
+        dati <- ci[,grepl(j,colnames(ci))]
+        cor(dati[,1],dati[,2],method='spearman')
+      })
+      corsi
+    },USE.NAMES=TRUE,simplify=FALSE)
+    rep_cor <- do.call(rbind,rep_cor)
+    
+    rep_cor <- as.data.frame.table(rep_cor)
+    rep_cor$binSize <- as.numeric(tools::file_path_sans_ext(sapply(strsplit(as.character(rep_cor$Var1),'_binSize_'),'[',2)))
+    rep_cor$binSize <- factor(rep_cor$binSize,levels=sort(unique(rep_cor$binSize)))
+    
+    ggplot(rep_cor,aes(x=binSize,y=Freq)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+    
+    scree <- sapply(pclus_files,function(i) {
+      pci <- readRDS(i)
+      pci$group <- tools::file_path_sans_ext(basename(i))
+      pci
+    },USE.NAMES=FALSE,simplify=FALSE)
+    scree <- as.data.frame(do.call(rbind,scree))
+    scree$group <- factor(scree$group,levels=str_sort(unique(scree$group),numeric=TRUE))
+    scree$y <- 10^scree$y
+    
+    ggplot(scree,aes(x=x,y=y,col=group)) +
+      geom_line() +
+      scale_y_log10() +
+      labs(x='Dimensions',y='Percentage of explained variances') +
+      scale_color_brewer(palette='Blues') +
+      theme_bw()
   

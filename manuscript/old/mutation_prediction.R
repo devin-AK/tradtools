@@ -5,9 +5,121 @@
   library(rtracklayer)
   library(Biostrings)
   
+  
+  source('~/Documents/GitHub/tradtools/manuscript/old/aggregate_bigwig.R')
+  
   # mutation predictions downloaded from
   # https://www.nature.com/articles/s41587-022-01353-8
   # https://static-content.springer.com/esm/art%3A10.1038%2Fs41587-022-01353-8/MediaObjects/41587_2022_1353_MOESM4_ESM.zip
+  
+  kfold_data <- '~/Desktop/trad/mutation_prediction/kfold_results/Skin-Melanoma/' # https://www.nature.com/articles/s41587-022-01353-8
+  blacklist <- '~/Desktop/trad/PCAWG/manuscript/MISC/hg19-blacklist.v2.bed.gz'
+  mappability <- '~/Desktop/trad/PCAWG/manuscript/MISC/wgEncodeCrgMapabilityAlign100mer.bigWig'
+  mutations <- '~/Desktop/trad/PCAWG/manuscript/RDS/maf_gr_03262023.RDS'
+  xrseq_dir <- '~/Desktop/trad/xrseq/xrseq'
+  force_seqinfo <- function(x, reference=NULL, chromosomes_to_keep=NULL) {
+    require('GenomicRanges')
+    require('GenomeInfoDb')
+    stopifnot(is(x,'GRanges'))
+    if(is.null(reference)) {
+      si <- seqinfo(x)
+      ss <- seqlevelsStyle(x)
+      sl <- seqlevels(x)
+    } else {
+      si <- seqinfo(reference)
+      ss <- seqlevelsStyle(si)
+      seqlevelsStyle(x) <- ss
+      sl <- seqlevels(si)
+      sl <- intersect(sl,seqlevels(x))
+    }
+    if(!is.null(chromosomes_to_keep)) {
+      sl <- intersect(sl,chromosomes_to_keep)
+    }
+    seqlevels(si) <- sl
+    seqlevels(x,pruning.mode='coarse') <- sl
+    seqinfo(x) <- si
+    return(x)
+  }
+  xrseq_dir <- '~/Desktop/trad/xrseq/xrseq'
+  gen <- BSgenome.Hsapiens.UCSC.hg19::BSgenome.Hsapiens.UCSC.hg19
+  chr_to_keep <- seqlevels(gen)[1:23]
+  
+  
+  ### Process
+  # Blacklist
+  bl <- read.table(blacklist,sep='\t',header=FALSE)
+  bl <- GRanges(seqnames=bl[,1],ranges=IRanges(start=bl[,2]+1,end=bl[,3]))
+  bl <- force_seqinfo(bl,reference=gen,chromosomes_to_keep=chr_to_keep)
+  bl <- sort(bl)
+  # saveRDS(bl,'bl.RDS')
+  
+  
+  xr_ids <- c('CPD_1h','CPD_4h','CPD_8h','CPD_16h','CPD_1d','CPD_2d')
+  xr_files <- dir(xrseq_dir,pattern='NHF1CPD',full.names=TRUE)
+  xr <- sapply(xr_files,function(i) {
+    xri <- import.bw(i)
+    xri <- force_seqinfo(xri,reference=gen,chromosomes_to_keep=chr_to_keep)
+    xri <- xri[!overlapsAny(xri,bl)]
+    xri <- sort(xri)
+    xri <- coverage(xri,weight='score')
+    gc()
+    xri
+  },simplify=FALSE,USE.NAMES=TRUE)
+  idx <- sapply(xr_ids,grep,x=names(xr),simplify=FALSE,USE.NAMES=TRUE)
+  xr <- sapply(idx,function(i) {
+    xi <- xr[i]
+    Reduce(`+`,xi)
+  },simplify=FALSE,USE.NAMES=TRUE)
+  # saveRDS(xr,'xr.RDS')
+  
+  #xr <- readRDS('xr.RDS')
+  
+  # Import top DSR regions
+  chr <- c(paste0('chr',1:22),'chrX')
+  dsr <- read.csv('~/Desktop/trad/DSR_results.csv')
+  dsr.gr <- GRanges(dsr[,1])
+  mcols(dsr.gr) <- dsr[,-1]
+  top_dsr <- dsr.gr[dsr.gr$DSR==TRUE]
+  
+  
+  # Define parameters
+  dsr_size <- 50e3
+  bin_size <- 10e3
+  flanking <- 500e3
+  
+  
+  # Get repair rate at DSRs
+  #dsr_repair <- sapply(xr,function(i) {
+  #  aggregate_bigwig2(bed_file=top_dsr,bigwig_file=i,bin_size=bin_size,flanking=flanking)
+  #},USE.NAMES=TRUE,simplify=FALSE)
+  
+  
+  
+  # Repair (early)
+  repair_early <- xr$CPD_1h + xr$CPD_4h + xr$CPD_8h
+  dsr_repair_early <- aggregate_bigwig2(top_dsr,repair_early,bin_size=bin_size,flanking=flanking)
+  #pdf('dsr_repair_early.pdf',width=2,height=1)
+    plot_aggregate_bigwig2(dsr_repair_early) + expand_limits(y=c(85000,115000))
+  #dev.off()
+  
+  # Repair (late)
+  repair_late <- xr$CPD_1d + xr$CPD_2d
+  dsr_repair_late <- aggregate_bigwig2(top_dsr,repair_late,bin_size=bin_size,flanking=flanking)
+  #pdf('dsr_repair_late.pdf',width=4,height=1)
+    plot_aggregate_bigwig2(dsr_repair_late)
+  #dev.off()
+    
+  dsr_CPD_2d <- aggregate_bigwig2(top_dsr,xr$CPD_2d,bin_size=bin_size,flanking=flanking)
+  #pdf('dsr_CPD_2d.pdf',width=2,height=1)
+    plot_aggregate_bigwig2(dsr_CPD_2d) + expand_limits(y=c(41000,48000))
+  #dev.off()
+  
+    
+    #pdf(file='LMNB1_profile.pdf',width=2,height=1)
+    plot_aggregate_bigwig2(lamin$LMNB1,col=COLORS_DISC[5]) + expand_limits(y=c(5400,7500))
+    #dev.off()
+    plot_aggregate_bigwig2_heatmap(lamin$LMNB1,breaks_type='sequence',scale_factor=2)
+    
   
   get_lambda_CPD_rate <- function(bed_files,fasta_file) {
     require(Biostrings)

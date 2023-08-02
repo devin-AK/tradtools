@@ -100,10 +100,13 @@
   }
   
   #dsr <- readRDS('/work/data/trad/TP53_resASH_DSR_50kb.RDS')
-  dsr <- readRDS('~/Desktop/trad/TP53_resASH_DSR_50kb.RDS')
-  top_dsr <- dsr[!is.na(dsr$padj) & dsr$padj < 0.00001,]
-  top_dsr <- as(row.names(top_dsr),'GRanges')
+  #dsr <- readRDS('~/Desktop/trad/TP53_resASH_DSR_50kb.RDS')
+  # top_dsr <- dsr[!is.na(dsr$padj) & dsr$padj < 0.00001,]
+  # top_dsr <- as(row.names(top_dsr),'GRanges')
   chr <- c(paste0('chr',1:22),'chrX')
+  dsr <- read.csv('~/Desktop/trad/DSR_results.csv')
+  top_dsr <- dsr[dsr$DSR==TRUE,]
+  top_dsr <- GRanges(top_dsr$X)
   
 
   sample <- 'TP53'
