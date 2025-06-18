@@ -5,8 +5,8 @@ cd $WORK_DIR
 mkdir -p genome
 cd genome
 wget https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.fa.gz
-wget https://github.com/devin-AK/small_data/blob/92f44ae07c190e5b01ca1661c26a9e804e043c27/tradtools/example_data/lambda.fa.gz
-wget https://github.com/devin-AK/small_data/blob/92f44ae07c190e5b01ca1661c26a9e804e043c27/tradtools/example_data/hg19-blacklist.v2.bed.gz
+wget https://github.com/devin-AK/small_data/raw/refs/heads/main/tradtools/example_data/lambda.fa.gz
+wget https://github.com/devin-AK/small_data/raw/refs/heads/main/tradtools/example_data/hg19-blacklist.v2.bed.gz
 cd ..
 
 # Run the tradtools pipeline to process raw Fastq data
