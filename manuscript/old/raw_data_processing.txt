@@ -9,10 +9,16 @@ wget https://github.com/devin-AK/small_data/raw/refs/heads/main/tradtools/exampl
 wget https://github.com/devin-AK/small_data/raw/refs/heads/main/tradtools/example_data/hg19-blacklist.v2.bed.gz
 cd ..
 
-# Run the tradtools pipeline to process raw Fastq data
+# Run the tradtools pipeline to process raw Fastq data (hg19)
 nextflow run devin-ak/tradtools --R1 fastq/Undetermined_HT7VYDSXX_L2_1.fq.gz \
                                 --R2 fastq/Undetermined_HT7VYDSXX_L2_2.fq.gz \
                                 --genome1 genome/hg19.fa.gz \
                                 --genome2 genome/lambda.fa.gz \
                                 --blacklist1 genome/hg19-blacklist.v2.bed.gz \
                                 --adapters adapters.fa
+
+# Use the T2T genome assembly
+# First, download blacklist (exclude ranges) from https://github.com/dozmorovlab/excluderanges?tab=readme-ov-file
+# download T2T assembly (Human Assembly Jan. 2022 (T2T CHM13v2.0/hs1))
+cd $WORK_DIR/genome
+wget https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/hs1.fa.gz
